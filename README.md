@@ -145,11 +145,13 @@ The programmer can override the compiler's preferred namespace selection using t
 
     [<receiver> @namespace(<ns>) arg1:... arg2:...];
 
-A namespace of `nil` instructs the compiler not to encode a namespace in the selector for the message send. This is discouraged, but can be useful when code needs to call methods in a namespace it cannot see (for example, calling private API to work around a framework or operating system bug).
+A namespace of `nil` instructs the compiler not to encode a namespace in the selector for the message send. This is discouraged, but can be useful when code needs to call methods in a namespace it cannot see (for example, calling private API to work around a framework or operating system bug).[^PRIVMSG]
 
 As noted above, the compiler should warn if multiple methods in different namespaces with the same keywords are seen defined on the class of the receiver.
 
 [^UNIQ]: It's possible to produce an binary that has multiple definitions of a method in the same namespace, but the loader will have chosen one winning method. This situation already exists independent of namespacing.
+
+[^PRIVMSG]: A better approach in this circumstance might be to forward-declare both the namespace and the method in question. This will permit the continued use of `-Wunknown-selector` warnings when using `@selector()` to catch typos in the namespace or keywords, or cases where ARC cannot determine the memory management behavior of the unknown selector.
 
 
 `@class()` Expressions
