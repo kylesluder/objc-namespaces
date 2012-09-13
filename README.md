@@ -129,7 +129,7 @@ Method definitions that do not have a corresponding declaration visible to the c
 Method Resolution
 =====
 
-When resolving a selector to a method, the dispatch machinery follows a certain resolution order, where _S_ refers to the selector being dispatched and _C_ is the class for the receiver (or a metaclass if the receiver is a class).
+When resolving a selector to a method at runtime, the dispatch machinery follows a certain resolution order, where _S_ refers to the selector being dispatched and _C_ is the class for the receiver (or a metaclass if the receiver is a class).
 
 1. If a matching method is found on _C_ that belongs to the same namespace as _S_, that method is chosen. Only one such method can exist.[^UNIQ]
 
