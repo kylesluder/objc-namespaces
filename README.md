@@ -107,11 +107,13 @@ At the heart of this proposal is the redefinition of the selector (whose type is
 * Selectors without namespaces are considered equal if and only if their keywords are equal.
 * A selector with a namespace is considered "compatible with" a selector lacking a namespace if and only if their keywords are equal.
 
-New syntax is defined to refer to namespaced selectors: `@selector(<ns>, <kw>)` refers to a selector in the namespace `<ns>` composed of keywords `<kw>`. The existing `@selector(<kw>)` syntax looks up a selector based on the namespace scope resolution rules above. The compiler should warn if multiple matching selectors are found in the current stack of namespace scopes.
+New syntax is defined to refer to namespaced selectors: `@selector(<ns>, <kw>)` refers to a selector in the namespace `<ns>` composed of keywords `<kw>`. To produce a selector in the default namespace, use the spelling `@selector(default, <kw>)`.
 
-To produce a selector in the default namespace, use the spelling `@selector(default, <kw>)`. To produce a selector that has no namespace, use the spelling `@selector(nil, <kw>)`.[^NILNS]
+The existing `@selector(<kw>)` syntax looks up a selector based on the namespace scope resolution rules above. The compiler should warn if multiple matching selectors are found in the current stack of namespace scopes.
 
-[^NILNS]: If the definition of `nil` is not changed to become a true keyword (or an alias thereof) rather than a macro for a null pointer constant, this definition may likewise permit the use of any null pointer constant as the first argument to the `@selector()`.
+Just as it is not an error to create a `@selector` expression that refers to a non-existent method, it is not an error to refer to a non-existent namespace in a namespaced `@selector` expression. The compiler can optionally be made to warn about such expressions; these warnings can be silenced by making a declaration of a category within the appropriate namespace visible to the `@selector` expression.
+
+**Rationale**: It is often useful for code to refer to private or otherwise invisible names. For example, debugging code might want to send a private message to an object, or replace a private method's implementation with one that logs. Requiring an artificial category declaration just to reference such symbols seems heavy-handed, though extending the approach of `-Wundeclared-selector` to namespaces offers flexibility to those who believe code quality is improved by requiring explicit redeclarations of the contents of private namespaces.
 
 
 Namespaced Classes, Categories, and Protocols
