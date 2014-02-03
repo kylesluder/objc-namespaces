@@ -55,11 +55,11 @@ The `@namespace` keyword begins a namespace block that exists until a balancing 
       .
     @end
 
-Namespace blocks cannot occur within any other block (in either the Objective-C `@ ... @end` or C "delimited by curly-braces" sense), including within any other namespace block.[^OBJCPPNS]
+Namespace blocks may only exist at the top level of a source file, as the direct child of another Objective-C namespace block, or as the direct child of a curly-brace delimited block attached to a C++ `namespace` declaration.
+
+**Rationale**: It might not always be feasible to order Objective-C++ source code such that all the Objective-C `@namespace` declarations precede the C++ `namespace` declarations.
 
 Unqualified declarations, including forward declarations, declared within a namespace block belong to the namespace named by that block. Namespaces can be reopened in the same or other translation units in any module using a `@namespace` block, but those symbols may not be visible to code in scopes that cannot see the actual declaration.
-
-[^OBJCPPNS]: It might be worth considering relaxing this restriction to allow use of Objective-C `@namespace` within C++ `namespace` blocks, but since C++ namespaces can also be reopened there doesn't seem to be a pressing need. 
 
 
 Namespace Scopes and the `@using` Directive
