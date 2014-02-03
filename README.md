@@ -33,7 +33,9 @@ A namespace is named by a string consisting of valid C identifier characters and
 The Default Namespace
 =====
 
-There exists one namespace named `default` to which all classes, categories, and protocols are assumed to belong unless otherwise specified. This namespace exists primarily to support interoperating with existing code that is not namespace-aware. In particular, to remain compatible with existing code, framework classes should remain in the default namespace while their private methods should be moved to categories in a private namespace.
+There exists one namespace named `default` namespace to which all classes, categories, and protocols are assumed to belong unless otherwise specified. The contents of this namespace are visible from every scope. (See "Namespace Scopes and the `@using` Directive").
+
+**Rationale:** This namespace exists primarily to support interoperating with existing code that is not namespace-aware. In particular, to remain compatible with existing code, framework classes should remain in the default namespace while their private methods should be moved to categories in a private namespace.
 
 
 Qualified Identifiers
