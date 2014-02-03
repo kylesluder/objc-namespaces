@@ -1,0 +1,78 @@
+set(LLVM_LINK_COMPONENTS
+  BitReader
+  BitWriter
+  Core
+  IPO
+  IRReader
+  InstCombine
+  Instrumentation
+  Linker
+  MC
+  ObjCARCOpts
+  ScalarOpts
+  Support
+  Target
+  TransformUtils
+  )
+
+add_clang_library(clangCodeGen
+  BackendUtil.cpp
+  CGAtomic.cpp
+  CGBlocks.cpp
+  CGBuiltin.cpp
+  CGCUDANV.cpp
+  CGCUDARuntime.cpp
+  CGCXX.cpp
+  CGCXXABI.cpp
+  CGCall.cpp
+  CGClass.cpp
+  CGCleanup.cpp
+  CGDebugInfo.cpp
+  CGDecl.cpp
+  CGDeclCXX.cpp
+  CGException.cpp
+  CGExpr.cpp
+  CGExprAgg.cpp
+  CGExprCXX.cpp
+  CGExprComplex.cpp
+  CGExprConstant.cpp
+  CGExprScalar.cpp
+  CGObjC.cpp
+  CGObjCGNU.cpp
+  CGObjCMac.cpp
+  CGObjCRuntime.cpp
+  CGOpenCLRuntime.cpp
+  CGRTTI.cpp
+  CGRecordLayoutBuilder.cpp
+  CGStmt.cpp
+  CGVTT.cpp
+  CGVTables.cpp
+  CodeGenABITypes.cpp
+  CodeGenAction.cpp
+  CodeGenFunction.cpp
+  CodeGenModule.cpp
+  CodeGenPGO.cpp
+  CodeGenTBAA.cpp
+  CodeGenTypes.cpp
+  ItaniumCXXABI.cpp
+  MicrosoftCXXABI.cpp
+  ModuleBuilder.cpp
+  TargetInfo.cpp
+  )
+
+add_dependencies(clangCodeGen
+  ClangARMNeon
+  ClangAttrClasses
+  ClangAttrList
+  ClangCommentNodes
+  ClangDeclNodes
+  ClangDiagnosticCommon
+  ClangDiagnosticFrontend
+  ClangStmtNodes
+  )
+
+target_link_libraries(clangCodeGen
+  clangBasic
+  clangAST
+  clangFrontend
+  )
