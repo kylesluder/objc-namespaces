@@ -136,6 +136,8 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(TargetMachine &TM) :
   setLoadExtAction(ISD::SEXTLOAD, MVT::v4i16, Expand);
   setLoadExtAction(ISD::ZEXTLOAD, MVT::v4i16, Expand);
 
+  setOperationAction(ISD::BR_CC, MVT::i1, Expand);
+
   setOperationAction(ISD::FNEG, MVT::v2f32, Expand);
   setOperationAction(ISD::FNEG, MVT::v4f32, Expand);
 
@@ -185,6 +187,7 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(TargetMachine &TM) :
     setOperationAction(ISD::FABS, VT, Expand);
     setOperationAction(ISD::FADD, VT, Expand);
     setOperationAction(ISD::FDIV, VT, Expand);
+    setOperationAction(ISD::FPOW, VT, Expand);
     setOperationAction(ISD::FFLOOR, VT, Expand);
     setOperationAction(ISD::FTRUNC, VT, Expand);
     setOperationAction(ISD::FMUL, VT, Expand);

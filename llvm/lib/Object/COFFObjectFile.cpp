@@ -159,11 +159,15 @@ uint32_t COFFObjectFile::getSymbolFlags(DataRefImpl Ref) const {
   const coff_symbol *Symb = toSymb(Ref);
   uint32_t Result = SymbolRef::SF_None;
 
-  // TODO: Correctly set SF_FormatSpecific, SF_ThreadLocal, SF_Common
+  // TODO: Correctly set SF_FormatSpecific, SF_Common
 
-  if (Symb->StorageClass == COFF::IMAGE_SYM_CLASS_EXTERNAL &&
-      Symb->SectionNumber == COFF::IMAGE_SYM_UNDEFINED)
-    Result |= SymbolRef::SF_Undefined;
+  if (Symb->SectionNumber == COFF::IMAGE_SYM_UNDEFINED) {
+    if (Symb->Value == 0)
+      Result |= SymbolRef::SF_Undefined;
+    else
+      Result |= SymbolRef::SF_Common;
+  }
+
 
   // TODO: This are certainly too restrictive.
   if (Symb->StorageClass == COFF::IMAGE_SYM_CLASS_EXTERNAL)

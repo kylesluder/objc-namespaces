@@ -104,9 +104,6 @@ static unsigned GetArchDefaultCPUArch(unsigned ID) {
   return 0;
 }
 
-void ARMTargetStreamer::anchor() {}
-ARMTargetStreamer::ARMTargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
-
 namespace {
 
 class ARMELFStreamer;
@@ -1037,7 +1034,7 @@ inline void ARMELFStreamer::SwitchToEHSection(const char *Prefix,
 
   // Switch to .ARM.extab or .ARM.exidx section
   SwitchSection(EHSection);
-  EmitCodeAlignment(4, 0);
+  EmitCodeAlignment(4);
 }
 
 inline void ARMELFStreamer::SwitchToExTabSection(const MCSymbol &FnStart) {
@@ -1296,13 +1293,13 @@ void ARMELFStreamer::emitUnwindRaw(int64_t Offset,
 namespace llvm {
 
 MCStreamer *createMCAsmStreamer(MCContext &Ctx, formatted_raw_ostream &OS,
-                                bool isVerboseAsm, bool useLoc, bool useCFI,
+                                bool isVerboseAsm, bool useCFI,
                                 bool useDwarfDirectory,
                                 MCInstPrinter *InstPrint, MCCodeEmitter *CE,
                                 MCAsmBackend *TAB, bool ShowInst) {
   MCStreamer *S =
-      llvm::createAsmStreamer(Ctx, OS, isVerboseAsm, useLoc, useCFI,
-                              useDwarfDirectory, InstPrint, CE, TAB, ShowInst);
+      llvm::createAsmStreamer(Ctx, OS, isVerboseAsm, useCFI, useDwarfDirectory,
+                              InstPrint, CE, TAB, ShowInst);
   new ARMTargetAsmStreamer(*S, OS, *InstPrint, isVerboseAsm);
   return S;
 }

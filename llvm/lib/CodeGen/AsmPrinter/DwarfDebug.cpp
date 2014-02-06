@@ -688,12 +688,12 @@ DIE *DwarfDebug::constructScopeDIE(DwarfCompileUnit *TheCU,
 // as well.
 unsigned DwarfDebug::getOrCreateSourceID(StringRef FileName, StringRef DirName,
                                          unsigned CUID) {
-  // If we use .loc in assembly, we can't separate .file entries according to
+  // If we print assembly, we can't separate .file entries according to
   // compile units. Thus all files will belong to the default compile unit.
 
   // FIXME: add a better feature test than hasRawTextSupport. Even better,
   // extend .file to support this.
-  if (Asm->TM.hasMCUseLoc() && Asm->OutStreamer.hasRawTextSupport())
+  if (Asm->OutStreamer.hasRawTextSupport())
     CUID = 0;
 
   // If FE did not provide a file name, then assume stdin.
@@ -766,10 +766,9 @@ DwarfCompileUnit *DwarfDebug::constructDwarfCompileUnit(DICompileUnit DIUnit) {
   Asm->OutStreamer.getContext().setMCLineTableSymbol(LineTableStartSym,
                                                      NewCU->getUniqueID());
 
-  // Use a single line table if we are using .loc and generating assembly.
+  // Use a single line table if we are generating assembly.
   bool UseTheFirstCU =
-      (Asm->TM.hasMCUseLoc() && Asm->OutStreamer.hasRawTextSupport()) ||
-      (NewCU->getUniqueID() == 0);
+      Asm->OutStreamer.hasRawTextSupport() || (NewCU->getUniqueID() == 0);
 
   if (!useSplitDwarf()) {
     // DW_AT_stmt_list is a offset of line number information for this
@@ -849,8 +848,7 @@ void DwarfDebug::constructSubprogramDIE(DwarfCompileUnit *TheCU,
 void DwarfDebug::constructImportedEntityDIE(DwarfCompileUnit *TheCU,
                                             const MDNode *N) {
   DIImportedEntity Module(N);
-  if (!Module.Verify())
-    return;
+  assert(Module.Verify());
   if (DIE *D = TheCU->getOrCreateContextDIE(Module.getContext()))
     constructImportedEntityDIE(TheCU, Module, D);
 }
@@ -858,8 +856,7 @@ void DwarfDebug::constructImportedEntityDIE(DwarfCompileUnit *TheCU,
 void DwarfDebug::constructImportedEntityDIE(DwarfCompileUnit *TheCU,
                                             const MDNode *N, DIE *Context) {
   DIImportedEntity Module(N);
-  if (!Module.Verify())
-    return;
+  assert(Module.Verify());
   return constructImportedEntityDIE(TheCU, Module, Context);
 }
 
@@ -1553,8 +1550,8 @@ void DwarfDebug::beginFunction(const MachineFunction *MF) {
   LexicalScope *FnScope = LScopes.getCurrentFunctionScope();
   DwarfCompileUnit *TheCU = SPMap.lookup(FnScope->getScopeNode());
   assert(TheCU && "Unable to find compile unit!");
-  if (Asm->TM.hasMCUseLoc() && Asm->OutStreamer.hasRawTextSupport())
-    // Use a single line table if we are using .loc and generating assembly.
+  if (Asm->OutStreamer.hasRawTextSupport())
+    // Use a single line table if we are generating assembly.
     Asm->OutStreamer.getContext().setDwarfCompileUnitID(0);
   else
     Asm->OutStreamer.getContext().setDwarfCompileUnitID(TheCU->getUniqueID());
