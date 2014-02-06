@@ -579,7 +579,7 @@ INTERCEPTOR(char *, strptime, char *s, char *format, __sanitizer_tm *tm) {
     va_list ap;                                                                \
     va_start(ap, format);                                                      \
     COMMON_INTERCEPTOR_ENTER(ctx, vname, __VA_ARGS__, ap);                     \
-    int res = vname(__VA_ARGS__, ap);                                          \
+    int res = WRAP(vname)(__VA_ARGS__, ap);                                    \
     va_end(ap);                                                                \
     return res;                                                                \
   }
@@ -844,7 +844,14 @@ INTERCEPTOR(int, ioctl, int d, unsigned request, void *arg) {
   if (!common_flags()->handle_ioctl) return REAL(ioctl)(d, request, arg);
 
   const ioctl_desc *desc = ioctl_lookup(request);
-  if (!desc) Printf("WARNING: unknown ioctl %x\n", request);
+  ioctl_desc decoded_desc;
+  if (!desc) {
+    VPrintf(2, "Decoding unknown ioctl 0x%x\n", request);
+    if (!ioctl_decode(request, &decoded_desc))
+      Printf("WARNING: failed decoding unknown ioctl 0x%x\n", request);
+    else
+      desc = &decoded_desc;
+  }
 
   if (desc) ioctl_common_pre(ctx, desc, d, request, arg);
   int res = REAL(ioctl)(d, request, arg);
@@ -2753,10 +2760,11 @@ INTERCEPTOR(int, pthread_attr_getstack, void *attr, void **addr, SIZE_T *size) {
 // We may need to call the real pthread_attr_getstack from the run-time
 // in sanitizer_common, but we don't want to include the interception headers
 // there. So, just define this function here.
-extern "C" int __sanitizer_pthread_attr_getstack(void *attr, void **addr,
-                                                 SIZE_T *size) {
+namespace __sanitizer {
+int real_pthread_attr_getstack(void *attr, void **addr, SIZE_T *size) {
   return REAL(pthread_attr_getstack)(attr, addr, size);
 }
+}  // namespace __sanitizer
 
 #define INIT_PTHREAD_ATTR_GET                             \
   COMMON_INTERCEPT_FUNCTION(pthread_attr_getdetachstate); \

@@ -21,6 +21,7 @@
 #include "sanitizer_placement_new.h"
 #include "sanitizer_procmaps.h"
 #include "sanitizer_stacktrace.h"
+#include "sanitizer_atomic.h"
 
 #include <dlfcn.h>
 #include <pthread.h>
@@ -32,37 +33,33 @@
 #if !SANITIZER_ANDROID
 #include <elf.h>
 #include <link.h>
+#include <unistd.h>
 #endif
-
-#ifndef SANITIZER_GO
-// This function is defined elsewhere if we intercepted pthread_attr_getstack.
-extern "C" SANITIZER_WEAK_ATTRIBUTE int
-__sanitizer_pthread_attr_getstack(void *attr, void **addr, size_t *size);
-
-static int my_pthread_attr_getstack(void *attr, void **addr, size_t *size) {
-  if (__sanitizer_pthread_attr_getstack)
-    return __sanitizer_pthread_attr_getstack((pthread_attr_t *)attr, addr,
-                                             size);
-
-  return pthread_attr_getstack((pthread_attr_t *)attr, addr, size);
-}
-#endif  // #ifndef SANITIZER_GO
 
 namespace __sanitizer {
 
 #ifndef SANITIZER_GO
-extern "C" SANITIZER_WEAK_ATTRIBUTE int
-__sanitizer_sigaction_f(int signum, const void *act, void *oldact);
+// This function is defined elsewhere if we intercepted pthread_attr_getstack.
+SANITIZER_WEAK_ATTRIBUTE int
+real_pthread_attr_getstack(void *attr, void **addr, size_t *size);
+
+static int my_pthread_attr_getstack(void *attr, void **addr, size_t *size) {
+  if (real_pthread_attr_getstack)
+    return real_pthread_attr_getstack((pthread_attr_t *)attr, addr, size);
+  return pthread_attr_getstack((pthread_attr_t *)attr, addr, size);
+}
+
+SANITIZER_WEAK_ATTRIBUTE int
+real_sigaction(int signum, const void *act, void *oldact);
 
 int internal_sigaction(int signum, const void *act, void *oldact) {
-  if (__sanitizer_sigaction_f)
-    return __sanitizer_sigaction_f(signum, act, oldact);
+  if (real_sigaction)
+    return real_sigaction(signum, act, oldact);
   return sigaction(signum, (struct sigaction *)act, (struct sigaction *)oldact);
 }
 
 void GetThreadStackTopAndBottom(bool at_initialization, uptr *stack_top,
                                 uptr *stack_bottom) {
-  static const uptr kMaxThreadStackSize = 1 << 30;  // 1Gb
   CHECK(stack_top);
   CHECK(stack_bottom);
   if (at_initialization) {
@@ -227,16 +224,41 @@ uptr GetTlsSize() {
 
 #if defined(__x86_64__) || defined(__i386__)
 // sizeof(struct thread) from glibc.
-// There has been a report of this being different on glibc 2.11 and 2.13. We
-// don't know when this change happened, so 2.14 is a conservative estimate.
-#if __GLIBC_PREREQ(2, 14)
-const uptr kThreadDescriptorSize = FIRST_32_SECOND_64(1216, 2304);
-#else
-const uptr kThreadDescriptorSize = FIRST_32_SECOND_64(1168, 2304);
-#endif
+static atomic_uintptr_t kThreadDescriptorSize;
 
 uptr ThreadDescriptorSize() {
-  return kThreadDescriptorSize;
+  char buf[64];
+  uptr val = atomic_load(&kThreadDescriptorSize, memory_order_relaxed);
+  if (val)
+    return val;
+#ifdef _CS_GNU_LIBC_VERSION
+  uptr len = confstr(_CS_GNU_LIBC_VERSION, buf, sizeof(buf));
+  if (len < sizeof(buf) && internal_strncmp(buf, "glibc 2.", 8) == 0) {
+    char *end;
+    int minor = internal_simple_strtoll(buf + 8, &end, 10);
+    if (end != buf + 8 && (*end == '\0' || *end == '.')) {
+      /* sizeof(struct thread) values from various glibc versions.  */
+      if (minor <= 3)
+        val = FIRST_32_SECOND_64(1104, 1696);
+      else if (minor == 4)
+        val = FIRST_32_SECOND_64(1120, 1728);
+      else if (minor == 5)
+        val = FIRST_32_SECOND_64(1136, 1728);
+      else if (minor <= 9)
+        val = FIRST_32_SECOND_64(1136, 1712);
+      else if (minor == 10)
+        val = FIRST_32_SECOND_64(1168, 1776);
+      else if (minor <= 12)
+        val = FIRST_32_SECOND_64(1168, 2288);
+      else
+        val = FIRST_32_SECOND_64(1216, 2304);
+    }
+    if (val)
+      atomic_store(&kThreadDescriptorSize, val, memory_order_relaxed);
+    return val;
+  }
+#endif
+  return 0;
 }
 
 // The offset at which pointer to self is located in the thread descriptor.
@@ -264,7 +286,7 @@ void GetThreadStackAndTls(bool main, uptr *stk_addr, uptr *stk_size,
   *tls_addr = ThreadSelf();
   *tls_size = GetTlsSize();
   *tls_addr -= *tls_size;
-  *tls_addr += kThreadDescriptorSize;
+  *tls_addr += ThreadDescriptorSize();
 #else
   *tls_addr = 0;
   *tls_size = 0;

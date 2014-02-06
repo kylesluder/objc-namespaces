@@ -43,9 +43,11 @@ static char ctx_placeholder[sizeof(Context)] ALIGNED(64);
 bool OnFinalize(bool failed);
 void OnInitialize();
 #else
+SANITIZER_INTERFACE_ATTRIBUTE
 bool WEAK OnFinalize(bool failed) {
   return failed;
 }
+SANITIZER_INTERFACE_ATTRIBUTE
 void WEAK OnInitialize() {}
 #endif
 
@@ -196,6 +198,9 @@ void DontNeedShadowFor(uptr addr, uptr size) {
 }
 
 void MapShadow(uptr addr, uptr size) {
+  // Global data is not 64K aligned, but there are no adjacent mappings,
+  // so we can get away with unaligned mapping.
+  // CHECK_EQ(addr, addr & ~((64 << 10) - 1));  // windows wants 64K alignment
   MmapFixedNoReserve(MemToShadow(addr), size * kShadowMultiplier);
 }
 
@@ -203,6 +208,7 @@ void MapThreadTrace(uptr addr, uptr size) {
   DPrintf("#0: Mapping trace at %p-%p(0x%zx)\n", addr, addr + size, size);
   CHECK_GE(addr, kTraceMemBegin);
   CHECK_LE(addr + size, kTraceMemBegin + kTraceMemSize);
+  CHECK_EQ(addr, addr & ~((64 << 10) - 1));  // windows wants 64K alignment
   uptr addr1 = (uptr)MmapFixedNoReserve(addr, size);
   if (addr1 != addr) {
     Printf("FATAL: ThreadSanitizer can not mmap thread trace (%p/%p->%p)\n",

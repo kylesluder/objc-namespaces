@@ -24,10 +24,10 @@
 #include "asan_allocator.h"
 #include "asan_interceptors.h"
 #include "asan_internal.h"
-#include "asan_mac.h"
 #include "asan_report.h"
 #include "asan_stack.h"
 #include "asan_stats.h"
+#include "sanitizer_common/sanitizer_mac.h"
 
 // Similar code is used in Google Perftools,
 // http://code.google.com/p/google-perftools.
