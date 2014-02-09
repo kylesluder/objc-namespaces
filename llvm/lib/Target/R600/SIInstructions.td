@@ -1846,7 +1846,7 @@ def : Pat <
 // 1. Offset as 8bit DWORD immediate
 def : Pat <
   (SIload_constant i128:$sbase, IMM8bitDWORD:$offset),
-  (S_BUFFER_LOAD_DWORD_IMM $sbase, IMM8bitDWORD:$offset)
+  (S_BUFFER_LOAD_DWORD_IMM $sbase, (as_dword_i32imm $offset))
 >;
 
 // 2. Offset loaded in an 32bit SGPR
@@ -1926,8 +1926,8 @@ multiclass SMRD_Pattern <SMRD Instr_IMM, SMRD Instr_SGPR, ValueType vt> {
 
   // 1. Offset as 8bit DWORD immediate
   def : Pat <
-    (constant_load (SIadd64bit32bit i64:$sbase, IMM8bitDWORD:$offset)),
-    (vt (Instr_IMM $sbase, IMM8bitDWORD:$offset))
+    (constant_load (add i64:$sbase, (i64 IMM8bitDWORD:$offset))),
+    (vt (Instr_IMM $sbase, (as_dword_i32imm $offset)))
   >;
 
   // 2. Offset loaded in an 32bit SGPR
@@ -1959,6 +1959,11 @@ defm : SMRD_Pattern <S_LOAD_DWORDX16_IMM, S_LOAD_DWORDX16_SGPR, v16i32>;
 
 multiclass MUBUFLoad_Pattern <MUBUF Instr_ADDR64, ValueType vt,
                               PatFrag global_ld, PatFrag constant_ld> {
+  def : Pat <
+    (vt (global_ld (mubuf_vaddr_offset i64:$ptr, i64:$offset, IMM12bit:$imm_offset))),
+    (Instr_ADDR64 (SI_ADDR64_RSRC $ptr), $offset, (as_i16imm $imm_offset))
+  >;
+
   def : Pat <
     (vt (global_ld (add i64:$ptr, (i64 IMM12bit:$offset)))),
     (Instr_ADDR64 (SI_ADDR64_RSRC (i64 0)), $ptr, (as_i16imm $offset))
@@ -2000,6 +2005,16 @@ defm : MUBUFLoad_Pattern <BUFFER_LOAD_DWORDX4_ADDR64, v4i32,
                           global_load, constant_load>;
 
 multiclass MUBUFStore_Pattern <MUBUF Instr, ValueType vt, PatFrag st> {
+
+  def : Pat <
+    (st vt:$value, (mubuf_vaddr_offset i64:$ptr, i64:$offset, IMM12bit:$imm_offset)),
+    (Instr $value, (SI_ADDR64_RSRC $ptr), $offset, (as_i16imm $imm_offset))
+  >;
+
+  def : Pat <
+    (st vt:$value, (add i64:$ptr, IMM12bit:$offset)),
+    (Instr $value, (SI_ADDR64_RSRC (i64 0)), $ptr, (as_i16imm $offset))
+  >;
 
   def : Pat <
     (st vt:$value, i64:$ptr),
