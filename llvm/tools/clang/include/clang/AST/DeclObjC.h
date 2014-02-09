@@ -106,6 +106,12 @@ class ObjCNamespaceDecl : public NamedDecl, public DeclContext {
   }
 
 public:
+  static ObjCNamespaceDecl *Create(const ASTContext &C, DeclContext *DC,
+                                   SourceLocation atLoc, IdentifierInfo *Id,
+                                   ObjCNamespaceDecl *PrevDecl);
+
+  static ObjCNamespaceDecl *CreateDeserialized(ASTContext &C, unsigned ID);
+
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == ObjCNamespace; }
