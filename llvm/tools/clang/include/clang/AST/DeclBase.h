@@ -1118,7 +1118,7 @@ public:
 
   bool isObjCContainer() const {
     switch (DeclKind) {
-        case Decl::ObjCNamespaceDecl:
+        case Decl::ObjCNamespace:
         case Decl::ObjCCategory:
         case Decl::ObjCCategoryImpl:
         case Decl::ObjCImplementation:
