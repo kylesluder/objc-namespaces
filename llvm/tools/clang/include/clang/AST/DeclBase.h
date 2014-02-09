@@ -1152,11 +1152,18 @@ public:
     return DeclKind >= Decl::firstRecord && DeclKind <= Decl::lastRecord;
   }
 
+  /// \brief Determines whether this context is a C++ namespace.
   bool isNamespace() const {
     return DeclKind == Decl::Namespace;
   }
 
+  /// \brief Determines whether this context is a C++11 inline namespace.
   bool isInlineNamespace() const;
+
+  /// \brief Determines whether this context is an ObjC namespace.
+  bool isObjCNamespace() const {
+    return DeclKind == Decl::ObjCNamespace;
+  }
 
   /// \brief Determines whether this context is dependent on a
   /// template parameter.
