@@ -8,4 +8,4 @@ This proposal introduces a new kind of selector that carries a namespace in addi
 Work in Progress
 =====
 
-This project is a work in progress. Mainline development is occurring on the `devel` branch. Discussion is happening in [GitHub Issues](https://github.com/kylesluder/objc-namespaces/issues?state=open).
+This project is a work in progress. Mainline development is occurring on the `develop` branch. Discussion is happening in [GitHub Issues](https://github.com/kylesluder/objc-namespaces/issues?state=open).
