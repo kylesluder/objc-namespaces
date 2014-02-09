@@ -98,6 +98,14 @@ public:
 /// namespaces are direct children.
 
 class ObjCNamespaceDecl : public NamedDecl, public DeclContext {
+
+  ObjCNamespaceDecl(ASTContext &C, DeclContext *DC, SourceLocation atLoc,
+    IdentifierInfo *Id, ObjCNamespaceDecl *PrevDecl)
+  : NamedDecl(ObjCNamespace, DC, atLoc, Id), DeclContext(ObjCNamespace) {
+    
+  }
+
+public:
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == ObjCNamespace; }

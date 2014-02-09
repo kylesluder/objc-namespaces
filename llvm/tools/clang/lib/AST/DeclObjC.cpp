@@ -45,6 +45,23 @@ void ObjCProtocolList::set(ObjCProtocolDecl* const* InList, unsigned Elts,
 }
 
 //===----------------------------------------------------------------------===//
+// ObjCNamespaceDecl
+//===----------------------------------------------------------------------===//
+
+ObjCNamespaceDecl *ObjCNamespaceDecl::Create(
+    const ASTContext &C, DeclContext *DC, SourceLocation atLoc,
+    IdentifierInfo *Id, ObjCNamespaceDecl *PrevDecl)
+{
+  return new (C, DC) ObjCNamespaceDecl(C, DC, atLoc, Id, PrevDecl);
+}
+
+ObjCNamespaceDecl *ObjCNamespaceDecl::CreateDeserialized(
+    ASTContext &C, unsigned ID)
+{
+  return new (C, ID) ObjCNamespaceDecl(derp);
+}
+
+//===----------------------------------------------------------------------===//
 // ObjCInterfaceDecl
 //===----------------------------------------------------------------------===//
 
