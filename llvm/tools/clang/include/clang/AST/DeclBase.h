@@ -1261,7 +1261,7 @@ public:
   /// contexts that are semanticaly connected to this declaration context,
   /// in source order, including this context (which may be the only result,
   /// for non-namespace contexts).
-  void collectAllContexts(SmallVectorImpl<DeclContext *> &Contexts) fixupforobjcnamespaces;
+  void collectAllContexts(SmallVectorImpl<DeclContext *> &Contexts);
 
   /// decl_iterator - Iterates through the declarations stored
   /// within this context.
