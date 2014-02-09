@@ -1008,6 +1008,7 @@ typedef ArrayRef<NamedDecl *> DeclContextLookupConstResult;
 ///   NamespaceDecl
 ///   FunctionDecl
 ///   TagDecl
+///   ObjCNamespaceDecl
 ///   ObjCMethodDecl
 ///   ObjCContainerDecl
 ///   LinkageSpecDecl
@@ -1117,6 +1118,7 @@ public:
 
   bool isObjCContainer() const {
     switch (DeclKind) {
+        case Decl::ObjCNamespaceDecl:
         case Decl::ObjCCategory:
         case Decl::ObjCCategoryImpl:
         case Decl::ObjCImplementation:
@@ -1259,7 +1261,7 @@ public:
   /// contexts that are semanticaly connected to this declaration context,
   /// in source order, including this context (which may be the only result,
   /// for non-namespace contexts).
-  void collectAllContexts(SmallVectorImpl<DeclContext *> &Contexts);
+  void collectAllContexts(SmallVectorImpl<DeclContext *> &Contexts) fixupforobjcnamespaces;
 
   /// decl_iterator - Iterates through the declarations stored
   /// within this context.

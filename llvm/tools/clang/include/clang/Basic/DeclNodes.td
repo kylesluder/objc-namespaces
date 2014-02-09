@@ -59,6 +59,7 @@ def Named : Decl<1>;
     def TemplateTemplateParm : DDecl<Template>;
   def Using : DDecl<Named>;
   def UsingShadow : DDecl<Named>;
+  def ObjCNamespace : DDecl<Named>, DeclContext;
   def ObjCMethod : DDecl<Named>, DeclContext;
   def ObjCContainer : DDecl<Named, 1>, DeclContext;
     def ObjCCategory : DDecl<ObjCContainer>;

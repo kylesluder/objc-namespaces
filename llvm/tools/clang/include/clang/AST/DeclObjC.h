@@ -24,6 +24,7 @@ class Expr;
 class Stmt;
 class FunctionDecl;
 class RecordDecl;
+class ObjCNamespaceDecl;
 class ObjCIvarDecl;
 class ObjCMethodDecl;
 class ObjCProtocolDecl;
@@ -87,6 +88,25 @@ public:
 
   void set(ObjCProtocolDecl* const* InList, unsigned Elts,
            const SourceLocation *Locs, ASTContext &Ctx);
+};
+
+
+/// ObjCNamespaceDecl - Represents a namespace declaration or redeclaration.
+/// Every ObjC declaration belongs to a namespace. The namespaces are arranged
+/// in a very shallow hierarchy: there is a "default" namespace which is in
+/// effect in the absence of any namespace declarations, and of which all other
+/// namespaces are direct children.
+
+class ObjCNamespaceDecl : public NamedDecl, public DeclContext {
+  // Implement isa/cast/dyncast/etc.
+  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
+  static bool classofKind(Kind K) { return K == ObjCNamespace; }
+  static DeclContext *castToDeclContext(const ObjCNamespaceDecl *D) {
+    return static_cast<DeclContext *>(const_cast<ObjCNamespaceDecl*>(D));
+  }
+  static ObjCNamespaceDecl *castFromDeclContext(const DeclContext *DC) {
+    return static_cast<ObjCNamespaceDecl *>(const_cast<DeclContext*>(DC));
+  }
 };
 
 
@@ -586,6 +606,8 @@ public:
   virtual SourceRange getSourceRange() const LLVM_READONLY {
     return SourceRange(AtStart, getAtEndRange().getEnd());
   }
+
+  ObjCNamespaceDecl *getContainingNamespaceDecl() const;
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
