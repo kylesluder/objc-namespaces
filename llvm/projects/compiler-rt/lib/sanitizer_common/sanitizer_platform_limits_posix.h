@@ -34,6 +34,7 @@ namespace __sanitizer {
   extern unsigned pid_t_sz;
   extern unsigned timeval_sz;
   extern unsigned uid_t_sz;
+  extern unsigned gid_t_sz;
   extern unsigned mbstate_t_sz;
   extern unsigned struct_timezone_sz;
   extern unsigned struct_tms_sz;
@@ -42,6 +43,7 @@ namespace __sanitizer {
   extern unsigned struct_sched_param_sz;
   extern unsigned struct_statfs_sz;
   extern unsigned struct_statfs64_sz;
+  extern unsigned struct_sockaddr_sz;
 
 #if !SANITIZER_ANDROID
   extern unsigned ucontext_t_sz;
@@ -202,12 +204,25 @@ namespace __sanitizer {
     uptr __unused5;
   #endif
   };
-  #endif  // SANITIZER_LINUX && !SANITIZER_ANDROID
+#endif  // SANITIZER_LINUX && !SANITIZER_ANDROID
 
   struct __sanitizer_iovec {
-    void  *iov_base;
+    void *iov_base;
     uptr iov_len;
   };
+
+#if !SANITIZER_ANDROID
+  struct __sanitizer_ifaddrs {
+    struct __sanitizer_ifaddrs *ifa_next;
+    char *ifa_name;
+    unsigned int ifa_flags;
+    void *ifa_addr;    // (struct sockaddr *)
+    void *ifa_netmask; // (struct sockaddr *)
+    // This is a union on Linux.
+    void *ifa_dstaddr; // (struct sockaddr *)
+    void *ifa_data;
+  };
+#endif  // !SANITIZER_ANDROID
 
 #if SANITIZER_MAC
   typedef unsigned long __sanitizer_pthread_key_t;

@@ -66,6 +66,7 @@
 #endif
 
 #if !SANITIZER_ANDROID
+#include <ifaddrs.h>
 #include <sys/ucontext.h>
 #include <wordexp.h>
 #endif
@@ -137,6 +138,7 @@ namespace __sanitizer {
   unsigned pid_t_sz = sizeof(pid_t);
   unsigned timeval_sz = sizeof(timeval);
   unsigned uid_t_sz = sizeof(uid_t);
+  unsigned gid_t_sz = sizeof(gid_t);
   unsigned mbstate_t_sz = sizeof(mbstate_t);
   unsigned sigset_t_sz = sizeof(sigset_t);
   unsigned struct_timezone_sz = sizeof(struct timezone);
@@ -150,6 +152,7 @@ namespace __sanitizer {
 #endif // SANITIZER_MAC && !SANITIZER_IOS
 
 #if !SANITIZER_ANDROID
+  unsigned struct_sockaddr_sz = sizeof(struct sockaddr);
   unsigned ucontext_t_sz = sizeof(ucontext_t);
 #endif // !SANITIZER_ANDROID
 
@@ -969,5 +972,27 @@ CHECK_SIZE_AND_OFFSET(shmid_ds, shm_nattch);
 #endif
 
 CHECK_TYPE_SIZE(clock_t);
+
+#if !SANITIZER_ANDROID
+CHECK_TYPE_SIZE(ifaddrs);
+CHECK_SIZE_AND_OFFSET(ifaddrs, ifa_next);
+CHECK_SIZE_AND_OFFSET(ifaddrs, ifa_name);
+CHECK_SIZE_AND_OFFSET(ifaddrs, ifa_addr);
+CHECK_SIZE_AND_OFFSET(ifaddrs, ifa_netmask);
+#if SANITIZER_LINUX
+// Compare against the union, because we can't reach into the union in a
+// compliant way.
+#ifdef ifa_dstaddr
+#undef ifa_dstaddr
+#endif
+COMPILER_CHECK(sizeof(((__sanitizer_ifaddrs *)NULL)->ifa_dstaddr) ==
+               sizeof(((ifaddrs *)NULL)->ifa_ifu));
+COMPILER_CHECK(offsetof(__sanitizer_ifaddrs, ifa_dstaddr) ==
+               offsetof(ifaddrs, ifa_ifu));
+#else
+CHECK_SIZE_AND_OFFSET(ifaddrs, ifa_dstaddr);
+#endif  // SANITIZER_LINUX
+CHECK_SIZE_AND_OFFSET(ifaddrs, ifa_data);
+#endif
 
 #endif  // SANITIZER_LINUX || SANITIZER_MAC
