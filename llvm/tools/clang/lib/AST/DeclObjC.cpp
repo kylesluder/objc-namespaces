@@ -62,7 +62,7 @@ ObjCNamespaceDecl *ObjCNamespaceDecl::CreateDeserialized(
 }
 
 //===----------------------------------------------------------------------===//
-// ObjCInterfaceDecl
+// ObjCContainerDecl
 //===----------------------------------------------------------------------===//
 
 void ObjCContainerDecl::anchor() { }
