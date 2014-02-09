@@ -1000,7 +1000,7 @@ TEST(Matcher, Call) {
 }
 
 TEST(Matcher, Lambda) {
-  EXPECT_TRUE(matches("auto f = [&] (int i) { return i; };",
+  EXPECT_TRUE(matches("auto f = [] (int i) { return i; };",
                       lambdaExpr()));
 }
 
@@ -1635,6 +1635,17 @@ TEST(Matcher, ConstructorArgumentCount) {
   EXPECT_TRUE(
       notMatches("class X { public: X(int, int); }; void x() { X x(0, 0); }",
                  Constructor1Arg));
+}
+
+TEST(Matcher, ConstructorListInitialization) {
+  StatementMatcher ConstructorListInit = constructExpr(isListInitialization());
+
+  EXPECT_TRUE(
+      matches("class X { public: X(int); }; void x() { X x{0}; }",
+              ConstructorListInit));
+  EXPECT_FALSE(
+      matches("class X { public: X(int); }; void x() { X x(0); }",
+              ConstructorListInit));
 }
 
 TEST(Matcher,ThisExpr) {

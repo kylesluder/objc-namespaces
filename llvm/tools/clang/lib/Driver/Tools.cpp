@@ -21,7 +21,6 @@
 #include "clang/Driver/SanitizerArgs.h"
 #include "clang/Driver/ToolChain.h"
 #include "clang/Driver/Util.h"
-#include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -2066,14 +2065,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-emit-pch");
     else
       CmdArgs.push_back("-emit-pth");
+  } else if (isa<VerifyPCHJobAction>(JA)) {
+    CmdArgs.push_back("-verify-pch");
   } else {
     assert(isa<CompileJobAction>(JA) && "Invalid action for clang tool.");
 
     if (JA.getType() == types::TY_Nothing) {
-      if (Args.hasArg(options::OPT_verify_pch))
-        CmdArgs.push_back("-verify-pch");
-      else
-        CmdArgs.push_back("-fsyntax-only");
+      CmdArgs.push_back("-fsyntax-only");
     } else if (JA.getType() == types::TY_LLVM_IR ||
                JA.getType() == types::TY_LTO_IR) {
       CmdArgs.push_back("-emit-llvm");
@@ -2882,9 +2880,13 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // behavior for now. FIXME: Directly diagnose uses of a string literal as
   // a non-const char* in C, rather than using this crude hack.
   if (!types::isCXX(InputType)) {
-    DiagnosticsEngine::Level DiagLevel = D.getDiags().getDiagnosticLevel(
-        diag::warn_deprecated_string_literal_conversion_c, SourceLocation());
-    if (DiagLevel > DiagnosticsEngine::Ignored)
+    // FIXME: This should behave just like a warning flag, and thus should also
+    // respect -Weverything, -Wno-everything, -Werror=write-strings, and so on.
+    Arg *WriteStrings =
+        Args.getLastArg(options::OPT_Wwrite_strings,
+                        options::OPT_Wno_write_strings, options::OPT_w);
+    if (WriteStrings &&
+        WriteStrings->getOption().matches(options::OPT_Wwrite_strings))
       CmdArgs.push_back("-fconst-strings");
   }
 
@@ -6145,10 +6147,12 @@ void netbsd::Link::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-m");
     switch (getToolChain().getTriple().getEnvironment()) {
     case llvm::Triple::EABI:
-    case llvm::Triple::EABIHF:
     case llvm::Triple::GNUEABI:
-    case llvm::Triple::GNUEABIHF:
       CmdArgs.push_back("armelf_nbsd_eabi");
+      break;
+    case llvm::Triple::EABIHF:
+    case llvm::Triple::GNUEABIHF:
+      CmdArgs.push_back("armelf_nbsd_eabihf");
       break;
     default:
       CmdArgs.push_back("armelf_nbsd");
