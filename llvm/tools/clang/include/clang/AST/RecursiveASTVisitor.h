@@ -1423,6 +1423,10 @@ DEF_TRAVERSE_DECL(NamespaceDecl, {
     // D->getAnonymousNamespace().
   })
 
+DEF_TRAVERSE_DECL(ObjCNamespaceDecl, {
+    // FIXME: Implement
+  })
+
 DEF_TRAVERSE_DECL(ObjCCompatibleAliasDecl, {
     // FIXME: implement
   })
