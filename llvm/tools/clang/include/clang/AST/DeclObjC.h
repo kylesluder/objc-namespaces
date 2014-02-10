@@ -97,13 +97,20 @@ public:
 /// effect in the absence of any namespace declarations, and of which all other
 /// namespaces are direct children.
 
-class ObjCNamespaceDecl : public NamedDecl, public DeclContext {
+class ObjCNamespaceDecl : public NamedDecl, public DeclContext,
+                          public Redeclarable<ObjCNamespaceDecl> {
 
   ObjCNamespaceDecl(const ASTContext &C, DeclContext *DC, SourceLocation atLoc,
     IdentifierInfo *Id, ObjCNamespaceDecl *PrevDecl)
   : NamedDecl(ObjCNamespace, DC, atLoc, Id), DeclContext(ObjCNamespace) {
-
+    setPreviousDecl(PrevDecl);
   }
+
+  // TODO: Why do we need to re-declare these?
+  typedef Redeclarable<ObjCNamespaceDecl> redeclarable_base;
+  virtual ObjCNamespaceDecl *getNextRedeclaration();
+  virtual ObjCNamespaceDecl *getPreviousDeclImpl();
+  virtual ObjCNamespaceDecl *getMostRecentDeclImpl();
 
 public:
   static ObjCNamespaceDecl *Create(const ASTContext &C, DeclContext *DC,
@@ -111,6 +118,14 @@ public:
                                    ObjCNamespaceDecl *PrevDecl);
 
   static ObjCNamespaceDecl *CreateDeserialized(ASTContext &C, unsigned ID);
+
+  // Expose Redeclarable<ObjCNamespaceDecl>
+  typedef redeclarable_base::redecl_iterator redecl_iterator;
+  using redeclarable_base::redecls_begin;
+  using redeclarable_base::redecls_end;
+  using redeclarable_base::getPreviousDecl;
+  using redeclarable_base::getMostRecentDecl;
+  using redeclarable_base::isFirstDecl;
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }

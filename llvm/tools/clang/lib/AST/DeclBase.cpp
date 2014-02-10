@@ -930,17 +930,24 @@ void
 DeclContext::collectAllContexts(SmallVectorImpl<DeclContext *> &Contexts){
   Contexts.clear();
   
-  if (DeclKind != Decl::Namespace) {
+  // TODO: I hate copy and paste...
+  if (DeclKind == Decl::Namespace) {
+    NamespaceDecl *Self = static_cast<NamespaceDecl *>(this);
+    for (NamespaceDecl *N = Self->getMostRecentDecl(); N;
+         N = N->getPreviousDecl())
+      Contexts.push_back(N);
+
+    std::reverse(Contexts.begin(), Contexts.end());
+  } else if (DeclKind == Decl::ObjCNamespace) {
+    ObjCNamespaceDecl *Self = static_cast<ObjCNamespaceDecl *>(this);
+    for (ObjCNamespaceDecl *N = Self->getMostRecentDecl(); N;
+         N = N->getPreviousDecl())
+      Contexts.push_back(N);
+
+    std::reverse(Contexts.begin(), Contexts.end());
+  } else {
     Contexts.push_back(this);
-    return;
   }
-  
-  NamespaceDecl *Self = static_cast<NamespaceDecl *>(this);
-  for (NamespaceDecl *N = Self->getMostRecentDecl(); N;
-       N = N->getPreviousDecl())
-    Contexts.push_back(N);
-  
-  std::reverse(Contexts.begin(), Contexts.end());
 }
 
 std::pair<Decl *, Decl *>
