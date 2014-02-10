@@ -99,10 +99,10 @@ public:
 
 class ObjCNamespaceDecl : public NamedDecl, public DeclContext {
 
-  ObjCNamespaceDecl(ASTContext &C, DeclContext *DC, SourceLocation atLoc,
+  ObjCNamespaceDecl(const ASTContext &C, DeclContext *DC, SourceLocation atLoc,
     IdentifierInfo *Id, ObjCNamespaceDecl *PrevDecl)
   : NamedDecl(ObjCNamespace, DC, atLoc, Id), DeclContext(ObjCNamespace) {
-    
+
   }
 
 public:
