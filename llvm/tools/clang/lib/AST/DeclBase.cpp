@@ -554,6 +554,9 @@ unsigned Decl::getIdentifierNamespaceForKind(Kind DeclKind) {
     case NamespaceAlias:
       return IDNS_Namespace;
 
+    case ObjCNamespace:
+      return IDNS_ObjCNamespace;
+
     case FunctionTemplate:
     case VarTemplate:
       return IDNS_Ordinary;
