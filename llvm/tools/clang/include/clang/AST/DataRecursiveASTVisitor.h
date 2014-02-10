@@ -1338,7 +1338,7 @@ DEF_TRAVERSE_DECL(NamespaceDecl, {
 
 DEF_TRAVERSE_DECL(ObjCNamespaceDecl, {
     // FIXME: Implement
-  });
+  })
 
 DEF_TRAVERSE_DECL(ObjCCompatibleAliasDecl, {
     // FIXME: implement
