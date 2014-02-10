@@ -106,7 +106,6 @@ class ObjCNamespaceDecl : public NamedDecl, public DeclContext,
     setPreviousDecl(PrevDecl);
   }
 
-  // TODO: Why do we need to re-declare these?
   typedef Redeclarable<ObjCNamespaceDecl> redeclarable_base;
   virtual ObjCNamespaceDecl *getNextRedeclaration();
   virtual ObjCNamespaceDecl *getPreviousDeclImpl();

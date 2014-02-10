@@ -61,6 +61,16 @@ ObjCNamespaceDecl *ObjCNamespaceDecl::CreateDeserialized(
   return new (C, ID) ObjCNamespaceDecl(derp);
 }
 
+ObjCNamespaceDecl *ObjCNamespaceDecl::getNextRedeclaration() {
+  return RedeclLink.getNext();
+}
+ObjCNamespaceDecl *ObjCNamespaceDecl::getPreviousDeclImpl() {
+  return getPreviousDecl();
+}
+ObjCNamespaceDecl *ObjCNamespaceDecl::getMostRecentDeclImpl() {
+  return getMostRecentDecl();
+}
+
 //===----------------------------------------------------------------------===//
 // ObjCContainerDecl
 //===----------------------------------------------------------------------===//
