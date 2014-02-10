@@ -62,6 +62,7 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
   case Decl::ObjCMethod:
   case Decl::ObjCCategory:
   case Decl::ObjCProtocol:
+  case Decl::ObjCNamespace:
   case Decl::ObjCInterface:
   case Decl::ObjCCategoryImpl:
   case Decl::ObjCImplementation:
