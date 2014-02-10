@@ -400,6 +400,7 @@ namespace clang {
 #define ABSTRACT_DECL(DECL)
 
 // Decls which never appear inside a class or function.
+#define OBJCNAMESPACE(DERIVED, BASE)
 #define OBJCCONTAINER(DERIVED, BASE)
 #define FILESCOPEASM(DERIVED, BASE)
 #define IMPORT(DERIVED, BASE)
