@@ -52,13 +52,13 @@ ObjCNamespaceDecl *ObjCNamespaceDecl::Create(
     const ASTContext &C, DeclContext *DC, SourceLocation atLoc,
     IdentifierInfo *Id, ObjCNamespaceDecl *PrevDecl)
 {
-  return new (C, DC) ObjCNamespaceDecl(C, DC, atLoc, Id, PrevDecl);
+  return new (C, DC) ObjCNamespaceDecl(DC, atLoc, Id, PrevDecl);
 }
 
 ObjCNamespaceDecl *ObjCNamespaceDecl::CreateDeserialized(
     ASTContext &C, unsigned ID)
 {
-  return new (C, ID) ObjCNamespaceDecl(derp);
+  return new (C, ID) ObjCNamespaceDecl(0, SourceLocation(), 0, 0);
 }
 
 ObjCNamespaceDecl *ObjCNamespaceDecl::getNextRedeclaration() {

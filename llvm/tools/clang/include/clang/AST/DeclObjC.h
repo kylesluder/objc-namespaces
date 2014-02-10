@@ -100,7 +100,7 @@ public:
 class ObjCNamespaceDecl : public NamedDecl, public DeclContext,
                           public Redeclarable<ObjCNamespaceDecl> {
 
-  ObjCNamespaceDecl(const ASTContext &C, DeclContext *DC, SourceLocation atLoc,
+  ObjCNamespaceDecl(DeclContext *DC, SourceLocation atLoc,
     IdentifierInfo *Id, ObjCNamespaceDecl *PrevDecl)
   : NamedDecl(ObjCNamespace, DC, atLoc, Id), DeclContext(ObjCNamespace) {
     setPreviousDecl(PrevDecl);
