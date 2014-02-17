@@ -2545,11 +2545,13 @@ Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
   if (getObjCContainerKind() == Sema::OCK_None)
     return 0;
 
-  // TODO: Handle end of @namespace
-  if (getObjCContainerKind() == Sema::OCK_Namespace)
-    return 0;
-
   assert(AtEnd.isValid() && "Invalid location for '@end'");
+
+  if (getObjCContainerKind() == Sema::OCK_Namespace) {
+    ObjCNamespaceDecl *NSDecl = cast<ObjCNamespaceDecl>(CurContext);
+    PopDeclContext();
+    return 0;
+  }
 
   ObjCContainerDecl *OCD = dyn_cast<ObjCContainerDecl>(CurContext);
   Decl *ClassDecl = cast<Decl>(OCD);
