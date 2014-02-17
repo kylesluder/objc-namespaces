@@ -428,6 +428,32 @@ void Sema::ActOnStartOfObjCMethodDef(Scope *FnBodyScope, Decl *D) {
   }
 }
 
+Decl *Sema::ActOnStartObjCNamespace(SourceLocation AtLoc,
+                                    IdentifierInfo *NamespaceId) {
+  assert (NamespaceId && "Missing namespace identifier");
+
+  // TODO: Allow for namespaces and classes to share names?
+  NamedDecl *PrevDecl = LookupSingleName(TUScope, NamespaceId, AtLoc,
+                                         LookupOrdinaryName, ForRedeclaration);
+
+  if (PrevDecl && !isa<ObjCNamespaceDecl>(PrevDecl)) {
+    Diag(AtLoc, diag::err_redefinition_different_kind) << NamespaceId;
+    Diag(PrevDecl->getLocation(), diag::note_previous_definition);
+  }
+
+  // Create a declaration to describe this @namespace.
+  ObjCNamespaceDecl* PrevNSDecl = dyn_cast_or_null<ObjCNamespaceDecl>(PrevDecl);
+
+  // TODO: Need to support @compatibility_alias?
+
+  ObjCNamespaceDecl *NSDecl = ObjCNamespaceDecl::Create(Context, CurContext,
+                                                        AtLoc, NamespaceId,
+                                                        PrevNSDecl);
+
+  // TODO: Attach a scope to the namespace so that methods can be resolved
+  return PushObjCNamespaceDecl(NSDecl);
+}
+
 namespace {
 
 // Callback to only accept typo corrections that are Objective-C classes.
@@ -2505,6 +2531,8 @@ Sema::ObjCContainerKind Sema::getObjCContainerKind() const {
       return Sema::OCK_Implementation;
     case Decl::ObjCCategoryImpl:
       return Sema::OCK_CategoryImplementation;
+    case Decl::ObjCNamespace:
+      return Sema::OCK_Namespace;
 
     default:
       return Sema::OCK_None;
@@ -2515,6 +2543,10 @@ Sema::ObjCContainerKind Sema::getObjCContainerKind() const {
 Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
                        ArrayRef<DeclGroupPtrTy> allTUVars) {
   if (getObjCContainerKind() == Sema::OCK_None)
+    return 0;
+
+  // TODO: Handle end of @namespace
+  if (getObjCContainerKind() == Sema::OCK_Namespace)
     return 0;
 
   assert(AtEnd.isValid() && "Invalid location for '@end'");

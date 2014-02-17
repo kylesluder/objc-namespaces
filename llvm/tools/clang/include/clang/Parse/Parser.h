@@ -1194,6 +1194,7 @@ private:
   void MaybeSkipAttributes(tok::ObjCKeywordKind Kind);
   DeclGroupPtrTy ParseObjCAtDirectives();
   DeclGroupPtrTy ParseObjCAtClassDeclaration(SourceLocation atLoc);
+  Decl *ParseObjCAtNamespaceDeclaration(SourceLocation AtLoc);
   Decl *ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                         ParsedAttributes &prefixAttrs);
   void HelperActionsForIvarDeclarations(Decl *interfaceDecl, SourceLocation atLoc,

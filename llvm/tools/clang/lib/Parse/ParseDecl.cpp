@@ -1485,6 +1485,7 @@ bool Parser::MightBeDeclarator(unsigned Context) {
 /// up parsing after a malformed declaration. This will sometimes stop sooner
 /// than SkipUntil(tok::r_brace) would, but will never stop later.
 void Parser::SkipMalformedDecl() {
+  // TODO: skip past malformed ObjC @namespace decls
   while (true) {
     switch (Tok.getKind()) {
     case tok::l_brace:

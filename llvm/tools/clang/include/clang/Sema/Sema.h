@@ -1737,6 +1737,10 @@ public:
 
   Decl *ActOnObjCContainerStartDefinition(Decl *IDecl);
 
+  // TODO: Get rid of this in favor of PushDeclContext, because ObjC namespaces
+  // are going to need scopes.
+  Decl *PushObjCNamespaceDecl(Decl *NSDecl);
+
   /// ActOnStartCXXMemberDeclarations - Invoked when we have parsed a
   /// C++ record definition's base-specifiers clause and are starting its
   /// member declarations.
@@ -6608,9 +6612,13 @@ public:
     OCK_Category,
     OCK_ClassExtension,
     OCK_Implementation,
-    OCK_CategoryImplementation
+    OCK_CategoryImplementation,
+    OCK_Namespace
   };
   ObjCContainerKind getObjCContainerKind() const;
+
+  Decl *ActOnStartObjCNamespace(SourceLocation AtLoc,
+                                IdentifierInfo *NamespaceId);
 
   Decl *ActOnStartClassInterface(SourceLocation AtInterfaceLoc,
                                  IdentifierInfo *ClassName,

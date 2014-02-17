@@ -11164,6 +11164,18 @@ Decl *Sema::ActOnObjCContainerStartDefinition(Decl *IDecl) {
   return IDecl;
 }
 
+Decl *Sema::PushObjCNamespaceDecl(Decl *NSDecl) {
+  // FIXME: Don't mind the duplicated code for now, because it will go away
+  // when we attach a scope to the namespace
+  assert(isa<ObjCNamespaceDecl>(NSDecl) &&
+    "PushObjCNamespaceDecl - Not ObjCNamespaceDecl");
+  DeclContext *OCD = cast<DeclContext>(NSDecl);
+  assert(getContainingDC(OCD) == CurContext &&
+      "The next DeclContext should be lexically contained in the current one.");
+  CurContext = OCD;
+  return NSDecl;
+}
+
 void Sema::ActOnStartCXXMemberDeclarations(Scope *S, Decl *TagD,
                                            SourceLocation FinalLoc,
                                            bool IsFinalSpelledSealed,

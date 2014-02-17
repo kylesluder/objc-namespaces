@@ -37,6 +37,7 @@ void Parser::MaybeSkipAttributes(tok::ObjCKeywordKind Kind) {
 
 /// ParseObjCAtDirectives - Handle parts of the external-declaration production:
 ///       external-declaration: [C99 6.9]
+/// [OBJC]  objc-namespace-declaration
 /// [OBJC]  objc-class-definition
 /// [OBJC]  objc-class-declaration
 /// [OBJC]  objc-alias-declaration
@@ -54,6 +55,10 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
     
   Decl *SingleDecl = 0;
   switch (Tok.getObjCKeywordID()) {
+  case tok::objc_namespace: {
+    SingleDecl = ParseObjCAtNamespaceDeclaration(AtLoc);
+    break;
+  }
   case tok::objc_class:
     return ParseObjCAtClassDeclaration(AtLoc);
   case tok::objc_interface: {
@@ -145,6 +150,33 @@ void Parser::CheckNestedObjCContexts(SourceLocation AtLoc)
   if (Decl)
     Diag(Decl->getLocStart(), diag::note_objc_container_start)
         << (int) ock;
+
+  // TODO: Check nesting of namepsaces
+}
+
+///   objc-namespace:
+///     '@' 'namespace' identifier
+///       external-declaration
+///     @end
+Decl *Parser::ParseObjCAtNamespaceDeclaration(SourceLocation AtLoc) {
+  assert(Tok.isObjCAtKeyword(tok::objc_namespace) &&
+         "ParseObjCAtNamespaceDeclaration(): Expected @namespace");
+  CheckNestedObjCContexts(AtLoc);
+  ConsumeToken(); // the namespace identifier
+
+  // TODO: Code Completion
+
+  if (Tok.isNot(tok::identifier)) {
+    Diag(Tok, diag::err_expected)
+      << tok::identifier; // missing namespace name
+      return 0;
+  }
+
+  // TODO: Support namespaces with embedded periods?
+
+  // Process namespace
+  // TODO: Reject nested @namespaces
+  return Actions.ActOnStartObjCNamespace(AtLoc, Tok.getIdentifierInfo());
 }
 
 ///
