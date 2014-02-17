@@ -171,6 +171,7 @@ bool serialization::isRedeclarableDeclKind(unsigned Kind) {
   case Decl::ClassTemplate:
   case Decl::VarTemplate:
   case Decl::TypeAliasTemplate:
+  case Decl::ObjCNamespace:
   case Decl::ObjCProtocol:
   case Decl::ObjCInterface:
   case Decl::Empty:
