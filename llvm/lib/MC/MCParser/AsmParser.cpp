@@ -64,11 +64,8 @@ struct MCAsmMacro {
   MCAsmMacroParameters Parameters;
 
 public:
-  MCAsmMacro(StringRef N, StringRef B, const MCAsmMacroParameters &P) :
+  MCAsmMacro(StringRef N, StringRef B, ArrayRef<MCAsmMacroParameter> P) :
     Name(N), Body(B), Parameters(P) {}
-
-  MCAsmMacro(const MCAsmMacro& Other)
-    : Name(Other.Name), Body(Other.Body), Parameters(Other.Parameters) {}
 };
 
 /// \brief Helper class for storing information about an active macro
@@ -252,10 +249,10 @@ private:
   bool parseCppHashLineFilenameComment(const SMLoc &L);
 
   void checkForBadMacro(SMLoc DirectiveLoc, StringRef Name, StringRef Body,
-                        MCAsmMacroParameters Parameters);
+                        ArrayRef<MCAsmMacroParameter> Parameters);
   bool expandMacro(raw_svector_ostream &OS, StringRef Body,
-                   const MCAsmMacroParameters &Parameters,
-                   const MCAsmMacroArguments &A,
+                   ArrayRef<MCAsmMacroParameter> Parameters,
+                   ArrayRef<MCAsmMacroArgument> A,
                    const SMLoc &L);
 
   /// \brief Are macros enabled in the parser?
@@ -1723,8 +1720,8 @@ static bool isIdentifierChar(char c) {
 }
 
 bool AsmParser::expandMacro(raw_svector_ostream &OS, StringRef Body,
-                            const MCAsmMacroParameters &Parameters,
-                            const MCAsmMacroArguments &A, const SMLoc &L) {
+                            ArrayRef<MCAsmMacroParameter> Parameters,
+                            ArrayRef<MCAsmMacroArgument> A, const SMLoc &L) {
   unsigned NParameters = Parameters.size();
   if (NParameters != 0 && NParameters != A.size())
     return Error(L, "Wrong number of arguments");
@@ -1940,39 +1937,80 @@ bool AsmParser::parseMacroArguments(const MCAsmMacro *M,
                                     MCAsmMacroArguments &A) {
   const unsigned NParameters = M ? M->Parameters.size() : 0;
 
+  A.resize(NParameters);
+  for (unsigned PI = 0; PI < NParameters; ++PI)
+    if (!M->Parameters[PI].second.empty())
+      A[PI] = M->Parameters[PI].second;
+
+  bool NamedParametersFound = false;
+
   // Parse two kinds of macro invocations:
   // - macros defined without any parameters accept an arbitrary number of them
   // - macros defined with parameters accept at most that many of them
   for (unsigned Parameter = 0; !NParameters || Parameter < NParameters;
        ++Parameter) {
-    MCAsmMacroArgument MA;
+    MCAsmMacroParameter FA;
+    SMLoc L;
 
-    if (parseMacroArgument(MA))
+    if (Lexer.is(AsmToken::Identifier) && Lexer.peekTok().is(AsmToken::Equal)) {
+      L = Lexer.getLoc();
+      if (parseIdentifier(FA.first)) {
+        Error(L, "invalid argument identifier for formal argument");
+        eatToEndOfStatement();
+        return true;
+      }
+
+      if (!Lexer.is(AsmToken::Equal)) {
+        TokError("expected '=' after formal parameter identifier");
+        eatToEndOfStatement();
+        return true;
+      }
+      Lex();
+
+      NamedParametersFound = true;
+    }
+
+    if (NamedParametersFound && FA.first.empty()) {
+      Error(Lexer.getLoc(), "cannot mix positional and keyword arguments");
+      eatToEndOfStatement();
+      return true;
+    }
+
+    if (parseMacroArgument(FA.second))
       return true;
 
-    if (!MA.empty() || (!NParameters && !Lexer.is(AsmToken::EndOfStatement)))
-      A.push_back(MA);
-    else if (NParameters) {
-      if (!M->Parameters[Parameter].second.empty())
-        A.push_back(M->Parameters[Parameter].second);
-      else
-        A.push_back(MA);
+    unsigned PI = Parameter;
+    if (!FA.first.empty()) {
+      unsigned FAI = 0;
+      for (FAI = 0; FAI < NParameters; ++FAI)
+        if (M->Parameters[FAI].first == FA.first)
+          break;
+      if (FAI >= NParameters) {
+        Error(L,
+              "parameter named '" + FA.first + "' does not exist for macro '" +
+              M->Name + "'");
+        return true;
+      }
+      PI = FAI;
+    }
+
+    if (!FA.second.empty()) {
+      if (A.size() <= PI)
+        A.resize(PI + 1);
+      A[PI] = FA.second;
     }
 
     // At the end of the statement, fill in remaining arguments that have
     // default values. If there aren't any, then the next argument is
     // required but missing
-    if (Lexer.is(AsmToken::EndOfStatement)) {
-      if (NParameters && Parameter < NParameters - 1) {
-        continue;
-      }
+    if (Lexer.is(AsmToken::EndOfStatement))
       return false;
-    }
 
     if (Lexer.is(AsmToken::Comma))
       Lex();
   }
-  return TokError("Too many arguments");
+
+  return TokError("too many positional arguments");
 }
 
 const MCAsmMacro *AsmParser::lookupMacro(StringRef Name) {
@@ -2081,12 +2119,6 @@ bool AsmParser::parseAssignment(StringRef Name, bool allow_redef,
   if (Lexer.isNot(AsmToken::EndOfStatement))
     return TokError("unexpected token in assignment");
 
-  // Error on assignment to '.'.
-  if (Name == ".") {
-    return Error(EqualLoc, ("assignment to pseudo-symbol '.' is unsupported "
-                            "(use '.space' or '.org').)"));
-  }
-
   // Eat the end of statement marker.
   Lex();
 
@@ -2114,10 +2146,14 @@ bool AsmParser::parseAssignment(StringRef Name, bool allow_redef,
 
     // Don't count these checks as uses.
     Sym->setUsed(false);
+  } else if (Name == ".") {
+    if (Out.EmitValueToOffset(Value, 0)) {
+      Error(EqualLoc, "expected absolute expression");
+      eatToEndOfStatement();
+    }
+    return false;
   } else
     Sym = getContext().GetOrCreateSymbol(Name);
-
-  // FIXME: Handle '.'.
 
   // Do the assignment.
   Out.EmitAssignment(Sym, Value);
@@ -3155,11 +3191,14 @@ bool AsmParser::parseDirectiveMacrosOnOff(StringRef Directive) {
 }
 
 /// parseDirectiveMacro
-/// ::= .macro name [parameters]
+/// ::= .macro name[,] [parameters]
 bool AsmParser::parseDirectiveMacro(SMLoc DirectiveLoc) {
   StringRef Name;
   if (parseIdentifier(Name))
     return TokError("expected identifier in '.macro' directive");
+
+  if (getLexer().is(AsmToken::Comma))
+    Lex();
 
   MCAsmMacroParameters Parameters;
   while (getLexer().isNot(AsmToken::EndOfStatement)) {
@@ -3183,6 +3222,7 @@ bool AsmParser::parseDirectiveMacro(SMLoc DirectiveLoc) {
   Lex();
 
   AsmToken EndToken, StartToken = getTok();
+  unsigned MacroDepth = 0;
 
   // Lex the macro definition.
   for (;;) {
@@ -3191,15 +3231,25 @@ bool AsmParser::parseDirectiveMacro(SMLoc DirectiveLoc) {
       return Error(DirectiveLoc, "no matching '.endmacro' in definition");
 
     // Otherwise, check whether we have reach the .endmacro.
-    if (getLexer().is(AsmToken::Identifier) &&
-        (getTok().getIdentifier() == ".endm" ||
-         getTok().getIdentifier() == ".endmacro")) {
-      EndToken = getTok();
-      Lex();
-      if (getLexer().isNot(AsmToken::EndOfStatement))
-        return TokError("unexpected token in '" + EndToken.getIdentifier() +
-                        "' directive");
-      break;
+    if (getLexer().is(AsmToken::Identifier)) {
+      if (getTok().getIdentifier() == ".endm" ||
+          getTok().getIdentifier() == ".endmacro") {
+        if (MacroDepth == 0) { // Outermost macro.
+          EndToken = getTok();
+          Lex();
+          if (getLexer().isNot(AsmToken::EndOfStatement))
+            return TokError("unexpected token in '" + EndToken.getIdentifier() +
+                            "' directive");
+          break;
+        } else {
+          // Otherwise we just found the end of an inner macro.
+          --MacroDepth;
+        }
+      } else if (getTok().getIdentifier() == ".macro") {
+        // We allow nested macros. Those aren't instantiated until the outermost
+        // macro is expanded so just ignore them for now.
+        ++MacroDepth;
+      }
     }
 
     // Otherwise, scan til the end of the statement.
@@ -3234,7 +3284,7 @@ bool AsmParser::parseDirectiveMacro(SMLoc DirectiveLoc) {
 /// and the strings like $1 are infact to simply to be passed trough unchanged.
 void AsmParser::checkForBadMacro(SMLoc DirectiveLoc, StringRef Name,
                                  StringRef Body,
-                                 MCAsmMacroParameters Parameters) {
+                                 ArrayRef<MCAsmMacroParameter> Parameters) {
   // If this macro is not defined with named parameters the warning we are
   // checking for here doesn't apply.
   unsigned NParameters = Parameters.size();
@@ -3995,9 +4045,7 @@ MCAsmMacro *AsmParser::parseMacroLikeBody(SMLoc DirectiveLoc) {
   StringRef Body = StringRef(BodyStart, BodyEnd - BodyStart);
 
   // We Are Anonymous.
-  StringRef Name;
-  MCAsmMacroParameters Parameters;
-  MacroLikeBodies.push_back(MCAsmMacro(Name, Body, Parameters));
+  MacroLikeBodies.push_back(MCAsmMacro(StringRef(), Body, None));
   return &MacroLikeBodies.back();
 }
 
@@ -4051,11 +4099,9 @@ bool AsmParser::parseDirectiveRept(SMLoc DirectiveLoc, StringRef Dir) {
   // Macro instantiation is lexical, unfortunately. We construct a new buffer
   // to hold the macro body with substitutions.
   SmallString<256> Buf;
-  MCAsmMacroParameters Parameters;
-  MCAsmMacroArguments A;
   raw_svector_ostream OS(Buf);
   while (Count--) {
-    if (expandMacro(OS, M->Body, Parameters, A, getTok().getLoc()))
+    if (expandMacro(OS, M->Body, None, None, getTok().getLoc()))
       return true;
   }
   instantiateMacroLikeBody(M, DirectiveLoc, OS);
@@ -4066,13 +4112,10 @@ bool AsmParser::parseDirectiveRept(SMLoc DirectiveLoc, StringRef Dir) {
 /// parseDirectiveIrp
 /// ::= .irp symbol,values
 bool AsmParser::parseDirectiveIrp(SMLoc DirectiveLoc) {
-  MCAsmMacroParameters Parameters;
   MCAsmMacroParameter Parameter;
 
   if (parseIdentifier(Parameter.first))
     return TokError("expected identifier in '.irp' directive");
-
-  Parameters.push_back(Parameter);
 
   if (Lexer.isNot(AsmToken::Comma))
     return TokError("expected comma in '.irp' directive");
@@ -4097,10 +4140,7 @@ bool AsmParser::parseDirectiveIrp(SMLoc DirectiveLoc) {
   raw_svector_ostream OS(Buf);
 
   for (MCAsmMacroArguments::iterator i = A.begin(), e = A.end(); i != e; ++i) {
-    MCAsmMacroArguments Args;
-    Args.push_back(*i);
-
-    if (expandMacro(OS, M->Body, Parameters, Args, getTok().getLoc()))
+    if (expandMacro(OS, M->Body, Parameter, *i, getTok().getLoc()))
       return true;
   }
 
@@ -4112,13 +4152,10 @@ bool AsmParser::parseDirectiveIrp(SMLoc DirectiveLoc) {
 /// parseDirectiveIrpc
 /// ::= .irpc symbol,values
 bool AsmParser::parseDirectiveIrpc(SMLoc DirectiveLoc) {
-  MCAsmMacroParameters Parameters;
   MCAsmMacroParameter Parameter;
 
   if (parseIdentifier(Parameter.first))
     return TokError("expected identifier in '.irpc' directive");
-
-  Parameters.push_back(Parameter);
 
   if (Lexer.isNot(AsmToken::Comma))
     return TokError("expected comma in '.irpc' directive");
@@ -4146,15 +4183,11 @@ bool AsmParser::parseDirectiveIrpc(SMLoc DirectiveLoc) {
   raw_svector_ostream OS(Buf);
 
   StringRef Values = A.front().front().getString();
-  std::size_t I, End = Values.size();
-  for (I = 0; I < End; ++I) {
+  for (std::size_t I = 0, End = Values.size(); I != End; ++I) {
     MCAsmMacroArgument Arg;
     Arg.push_back(AsmToken(AsmToken::Identifier, Values.slice(I, I + 1)));
 
-    MCAsmMacroArguments Args;
-    Args.push_back(Arg);
-
-    if (expandMacro(OS, M->Body, Parameters, Args, getTok().getLoc()))
+    if (expandMacro(OS, M->Body, Parameter, Arg, getTok().getLoc()))
       return true;
   }
 

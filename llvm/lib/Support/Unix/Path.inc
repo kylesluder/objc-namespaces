@@ -17,7 +17,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "Unix.h"
-#include "llvm/Support/Process.h"
 #include <limits.h>
 #include <stdio.h>
 #if HAVE_SYS_STAT_H
@@ -361,19 +360,6 @@ error_code create_hard_link(const Twine &to, const Twine &from) {
   return error_code::success();
 }
 
-error_code create_symlink(const Twine &to, const Twine &from) {
-  // Get arguments.
-  SmallString<128> from_storage;
-  SmallString<128> to_storage;
-  StringRef f = from.toNullTerminatedStringRef(from_storage);
-  StringRef t = to.toNullTerminatedStringRef(to_storage);
-
-  if (::symlink(t.begin(), f.begin()) == -1)
-    return error_code(errno, system_category());
-
-  return error_code::success();
-}
-
 error_code remove(const Twine &path, bool &existed) {
   SmallString<128> path_storage;
   StringRef p = path.toNullTerminatedStringRef(path_storage);
@@ -527,7 +513,7 @@ error_code status(int FD, file_status &Result) {
 error_code setLastModificationAndAccessTime(int FD, TimeValue Time) {
 #if defined(HAVE_FUTIMENS)
   timespec Times[2];
-  Times[0].tv_sec = Time.toPosixTime();
+  Times[0].tv_sec = Time.toEpochTime();
   Times[0].tv_nsec = 0;
   Times[1] = Times[0];
   if (::futimens(FD, Times))
@@ -535,7 +521,7 @@ error_code setLastModificationAndAccessTime(int FD, TimeValue Time) {
   return error_code::success();
 #elif defined(HAVE_FUTIMES)
   timeval Times[2];
-  Times[0].tv_sec = Time.toPosixTime();
+  Times[0].tv_sec = Time.toEpochTime();
   Times[0].tv_usec = 0;
   Times[1] = Times[0];
   if (::futimes(FD, Times))

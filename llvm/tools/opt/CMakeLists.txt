@@ -22,9 +22,11 @@ set(LLVM_NO_DEAD_STRIP 1)
 
 add_llvm_tool(opt
   AnalysisWrappers.cpp
+  BreakpointPrinter.cpp
   GraphPrinters.cpp
   NewPMDriver.cpp
   Passes.cpp
+  PassPrinters.cpp
   PrintSCC.cpp
   opt.cpp
   )

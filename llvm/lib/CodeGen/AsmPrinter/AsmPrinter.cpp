@@ -312,7 +312,7 @@ void AsmPrinter::EmitLinkage(const GlobalValue *GV, MCSymbol *GVSym) const {
 }
 
 MCSymbol *AsmPrinter::getSymbol(const GlobalValue *GV) const {
-  return getObjFileLowering().getSymbol(*Mang, GV);
+  return getObjFileLowering().getSymbol(GV, *Mang);
 }
 
 /// EmitGlobalVariable - Emit the specified global variable to the .s file.
@@ -697,7 +697,10 @@ bool AsmPrinter::needsSEHMoves() {
 void AsmPrinter::emitPrologLabel(const MachineInstr &MI) {
   const MCSymbol *Label = MI.getOperand(0).getMCSymbol();
 
-  if (MAI->getExceptionHandlingType() != ExceptionHandling::DwarfCFI)
+  ExceptionHandling::ExceptionsType ExceptionHandlingType =
+      MAI->getExceptionHandlingType();
+  if (ExceptionHandlingType != ExceptionHandling::DwarfCFI &&
+      ExceptionHandlingType != ExceptionHandling::ARM)
     return;
 
   if (needsCFIMoves() == CFI_M_None)
@@ -868,12 +871,14 @@ void AsmPrinter::EmitDwarfRegOp(const MachineLocation &MLoc,
                                 bool Indirect) const {
   const TargetRegisterInfo *TRI = TM.getRegisterInfo();
   int Reg = TRI->getDwarfRegNum(MLoc.getReg(), false);
+  bool isSubRegister = Reg < 0;
+  unsigned Idx = 0;
 
   for (MCSuperRegIterator SR(MLoc.getReg(), TRI); SR.isValid() && Reg < 0;
        ++SR) {
     Reg = TRI->getDwarfRegNum(*SR, false);
-    // FIXME: Get the bit range this register uses of the superregister
-    // so that we can produce a DW_OP_bit_piece
+    if (Reg >= 0)
+      Idx = TRI->getSubRegIndex(*SR, MLoc.getReg());
   }
 
   // FIXME: Handle cases like a super register being encoded as
@@ -882,6 +887,11 @@ void AsmPrinter::EmitDwarfRegOp(const MachineLocation &MLoc,
   // FIXME: We have no reasonable way of handling errors in here. The
   // caller might be in the middle of an dwarf expression. We should
   // probably assert that Reg >= 0 once debug info generation is more mature.
+  if (Reg < 0) {
+    OutStreamer.AddComment("nop (invalid dwarf register number)");
+    EmitInt8(dwarf::DW_OP_nop);
+    return;
+  }
 
   if (MLoc.isIndirect() || Indirect) {
     if (Reg < 32) {
@@ -910,7 +920,25 @@ void AsmPrinter::EmitDwarfRegOp(const MachineLocation &MLoc,
     }
   }
 
-  // FIXME: Produce a DW_OP_bit_piece if we used a superregister
+  // Emit Mask
+  if (isSubRegister) {
+    unsigned Size = TRI->getSubRegIdxSize(Idx);
+    unsigned Offset = TRI->getSubRegIdxOffset(Idx);
+    if (Offset > 0) {
+      OutStreamer.AddComment("DW_OP_bit_piece");
+      EmitInt8(dwarf::DW_OP_bit_piece);
+      OutStreamer.AddComment(Twine(Size));
+      EmitULEB128(Size);
+      OutStreamer.AddComment(Twine(Offset));
+      EmitULEB128(Offset);
+    } else {
+      OutStreamer.AddComment("DW_OP_piece");
+      EmitInt8(dwarf::DW_OP_piece);
+      unsigned ByteSize = Size / 8; // Assuming 8 bits per byte.
+      OutStreamer.AddComment(Twine(ByteSize));
+      EmitULEB128(ByteSize);
+    }
+  }
 }
 
 bool AsmPrinter::doFinalization(Module &M) {
@@ -1398,7 +1426,7 @@ void AsmPrinter::EmitModuleIdents(Module &M) {
   if (const NamedMDNode *NMD = M.getNamedMetadata("llvm.ident")) {
     for (unsigned i = 0, e = NMD->getNumOperands(); i != e; ++i) {
       const MDNode *N = NMD->getOperand(i);
-      assert(N->getNumOperands() == 1 && 
+      assert(N->getNumOperands() == 1 &&
              "llvm.ident metadata entry can have only one operand");
       const MDString *S = cast<MDString>(N->getOperand(0));
       OutStreamer.EmitIdent(S->getString());
@@ -2075,7 +2103,7 @@ MCSymbol *AsmPrinter::GetJTSetSymbol(unsigned UID, unsigned MBBID) const {
 
 MCSymbol *AsmPrinter::getSymbolWithGlobalValueBase(const GlobalValue *GV,
                                                    StringRef Suffix) const {
-  return getObjFileLowering().getSymbolWithGlobalValueBase(*Mang, GV, Suffix);
+  return getObjFileLowering().getSymbolWithGlobalValueBase(GV, Suffix, *Mang);
 }
 
 /// GetExternalSymbolSymbol - Return the MCSymbol for the specified

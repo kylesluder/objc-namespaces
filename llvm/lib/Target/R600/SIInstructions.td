@@ -1668,6 +1668,8 @@ def : BitConvert <v4i32, v4f32, VReg_128>;
 def : BitConvert <v4i32, i128,  VReg_128>;
 def : BitConvert <i128, v4i32,  VReg_128>;
 
+def : BitConvert <v8f32, v8i32, SReg_256>;
+def : BitConvert <v8i32, v8f32, SReg_256>;
 def : BitConvert <v8i32, v32i8, SReg_256>;
 def : BitConvert <v32i8, v8i32, SReg_256>;
 def : BitConvert <v8i32, v32i8, VReg_256>;
@@ -1838,10 +1840,13 @@ def : Pat <
   (V_CNDMASK_B32_e64 (i32 0), (i32 -1), $src0)
 >;
 
-def : Pat <
-  (i32 (zext i1:$src0)),
+class Ext32Pat <SDNode ext> : Pat <
+  (i32 (ext i1:$src0)),
   (V_CNDMASK_B32_e64 (i32 0), (i32 1), $src0)
 >;
+
+def : Ext32Pat <zext>;
+def : Ext32Pat <anyext>;
 
 // 1. Offset as 8bit DWORD immediate
 def : Pat <

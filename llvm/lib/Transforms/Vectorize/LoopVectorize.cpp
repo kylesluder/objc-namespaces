@@ -5491,9 +5491,16 @@ LoopVectorizationCostModel::getInstructionCost(Instruction *I, unsigned VF) {
       TargetTransformInfo::OK_AnyValue;
     TargetTransformInfo::OperandValueKind Op2VK =
       TargetTransformInfo::OK_AnyValue;
+    Value *Op2 = I->getOperand(1);
 
-    if (isa<ConstantInt>(I->getOperand(1)))
+    // Check for a splat of a constant or for a non uniform vector of constants.
+    if (isa<ConstantInt>(Op2))
       Op2VK = TargetTransformInfo::OK_UniformConstantValue;
+    else if (isa<ConstantVector>(Op2) || isa<ConstantDataVector>(Op2)) {
+      Op2VK = TargetTransformInfo::OK_NonUniformConstantValue;
+      if (cast<Constant>(Op2)->getSplatValue() != NULL)
+        Op2VK = TargetTransformInfo::OK_UniformConstantValue;
+    }
 
     return TTI.getArithmeticInstrCost(I->getOpcode(), VectorTy, Op1VK, Op2VK);
   }
