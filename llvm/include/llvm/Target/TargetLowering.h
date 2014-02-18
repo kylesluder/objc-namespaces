@@ -48,8 +48,10 @@ namespace llvm {
   class MachineFunction;
   class MachineInstr;
   class MachineJumpTableInfo;
+  class Mangler;
   class MCContext;
   class MCExpr;
+  class MCSymbol;
   template<typename T> class SmallVectorImpl;
   class DataLayout;
   class TargetRegisterClass;
@@ -143,7 +145,7 @@ protected:
 
 public:
   const TargetMachine &getTargetMachine() const { return TM; }
-  const DataLayout *getDataLayout() const { return TD; }
+  const DataLayout *getDataLayout() const { return DL; }
   const TargetLoweringObjectFile &getObjFileLowering() const { return TLOF; }
 
   bool isBigEndian() const { return !IsLittleEndian; }
@@ -1335,9 +1337,13 @@ public:
     return LibcallCallingConvs[Call];
   }
 
+  void getNameWithPrefix(SmallVectorImpl<char> &Name, const GlobalValue *GV,
+                         Mangler &Mang) const;
+  MCSymbol *getSymbol(const GlobalValue *GV, Mangler &Mang) const;
+
 private:
   const TargetMachine &TM;
-  const DataLayout *TD;
+  const DataLayout *DL;
   const TargetLoweringObjectFile &TLOF;
 
   /// True if this is a little endian target.
