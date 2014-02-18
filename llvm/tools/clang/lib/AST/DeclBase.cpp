@@ -878,7 +878,7 @@ DeclContext *DeclContext::getPrimaryContext() {
 
   case Decl::ObjCNamespace:
     // The original namespace is our primary context.
-    return cast<ObjCNamespaceDecl*>(this)->getFirstDecl();
+    return (cast<ObjCNamespaceDecl>(this))->getFirstDecl();
 
   case Decl::ObjCMethod:
     return this;
