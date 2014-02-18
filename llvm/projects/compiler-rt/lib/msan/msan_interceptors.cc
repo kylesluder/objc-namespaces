@@ -42,6 +42,8 @@ static unsigned g_thread_finalize_key;
 // True if this is a nested interceptor.
 static THREADLOCAL int in_interceptor_scope;
 
+extern "C" int *__errno_location(void);
+
 struct InterceptorScope {
   InterceptorScope() { ++in_interceptor_scope; }
   ~InterceptorScope() { --in_interceptor_scope; }
@@ -796,9 +798,12 @@ INTERCEPTOR(void *, mmap, void *addr, SIZE_T length, int prot, int flags,
             int fd, OFF_T offset) {
   ENSURE_MSAN_INITED();
   if (addr && !MEM_IS_APP(addr)) {
-    CHECK(!(flags & map_fixed) &&
-          "mmap(..., MAP_FIXED) outside of application memory range.");
-    addr = 0;
+    if (flags & map_fixed) {
+      *__errno_location() = errno_EINVAL;
+      return (void *)-1;
+    } else {
+      addr = 0;
+    }
   }
   void *res = REAL(mmap)(addr, length, prot, flags, fd, offset);
   if (res != (void*)-1)
@@ -809,6 +814,14 @@ INTERCEPTOR(void *, mmap, void *addr, SIZE_T length, int prot, int flags,
 INTERCEPTOR(void *, mmap64, void *addr, SIZE_T length, int prot, int flags,
             int fd, OFF64_T offset) {
   ENSURE_MSAN_INITED();
+  if (addr && !MEM_IS_APP(addr)) {
+    if (flags & map_fixed) {
+      *__errno_location() = errno_EINVAL;
+      return (void *)-1;
+    } else {
+      addr = 0;
+    }
+  }
   void *res = REAL(mmap64)(addr, length, prot, flags, fd, offset);
   if (res != (void*)-1)
     __msan_unpoison(res, RoundUpTo(length, GetPageSize()));
@@ -1171,8 +1184,6 @@ int OnExit() {
 
 }  // namespace __msan
 
-extern "C" int *__errno_location(void);
-
 // A version of CHECK_UNPOISONED using a saved scope value. Used in common
 // interceptors.
 #define CHECK_UNPOISONED_CTX(ctx, x, n)                         \
@@ -1268,28 +1279,53 @@ void *fast_memcpy(void *dst, const void *src, SIZE_T n) {
   return internal_memcpy(dst, src, n);
 }
 
+static void PoisonShadow(uptr ptr, uptr size, u8 value) {
+  uptr PageSize = GetPageSizeCached();
+  uptr shadow_beg = MEM_TO_SHADOW(ptr);
+  uptr shadow_end = MEM_TO_SHADOW(ptr + size);
+  if (value ||
+      shadow_end - shadow_beg < common_flags()->clear_shadow_mmap_threshold) {
+    fast_memset((void*)shadow_beg, value, shadow_end - shadow_beg);
+  } else {
+    uptr page_beg = RoundUpTo(shadow_beg, PageSize);
+    uptr page_end = RoundDownTo(shadow_end, PageSize);
+
+    if (page_beg >= page_end) {
+      fast_memset((void *)shadow_beg, 0, shadow_end - shadow_beg);
+    } else {
+      if (page_beg != shadow_beg) {
+        fast_memset((void *)shadow_beg, 0, page_beg - shadow_beg);
+      }
+      if (page_end != shadow_end) {
+        fast_memset((void *)page_end, 0, shadow_end - page_end);
+      }
+      MmapFixedNoReserve(page_beg, page_end - page_beg);
+    }
+  }
+}
+
 // These interface functions reside here so that they can use
 // fast_memset, etc.
 void __msan_unpoison(const void *a, uptr size) {
   if (!MEM_IS_APP(a)) return;
-  fast_memset((void*)MEM_TO_SHADOW((uptr)a), 0, size);
+  PoisonShadow((uptr)a, size, 0);
 }
 
 void __msan_poison(const void *a, uptr size) {
   if (!MEM_IS_APP(a)) return;
-  fast_memset((void*)MEM_TO_SHADOW((uptr)a),
-              __msan::flags()->poison_heap_with_zeroes ? 0 : -1, size);
+  PoisonShadow((uptr)a, size,
+               __msan::flags()->poison_heap_with_zeroes ? 0 : -1);
 }
 
 void __msan_poison_stack(void *a, uptr size) {
   if (!MEM_IS_APP(a)) return;
-  fast_memset((void*)MEM_TO_SHADOW((uptr)a),
-              __msan::flags()->poison_stack_with_zeroes ? 0 : -1, size);
+  PoisonShadow((uptr)a, size,
+               __msan::flags()->poison_stack_with_zeroes ? 0 : -1);
 }
 
 void __msan_clear_and_unpoison(void *a, uptr size) {
   fast_memset(a, 0, size);
-  fast_memset((void*)MEM_TO_SHADOW((uptr)a), 0, size);
+  PoisonShadow((uptr)a, size, 0);
 }
 
 u32 get_origin_if_poisoned(uptr a, uptr size) {

@@ -23,6 +23,7 @@ CommonFlags common_flags_dont_use;
 void SetCommonFlagsDefaults(CommonFlags *f) {
   f->symbolize = true;
   f->external_symbolizer_path = 0;
+  f->allow_addr2line = false;
   f->strip_path_prefix = "";
   f->fast_unwind_on_fatal = false;
   f->fast_unwind_on_malloc = true;
@@ -39,11 +40,14 @@ void SetCommonFlagsDefaults(CommonFlags *f) {
   f->handle_segv = SANITIZER_NEEDS_SEGV;
   f->allow_user_segv_handler = false;
   f->use_sigaltstack = false;
+  f->detect_deadlocks = false;
+  f->clear_shadow_mmap_threshold = 64 * 1024;
 }
 
 void ParseCommonFlagsFromString(CommonFlags *f, const char *str) {
   ParseFlag(str, &f->symbolize, "symbolize");
   ParseFlag(str, &f->external_symbolizer_path, "external_symbolizer_path");
+  ParseFlag(str, &f->allow_addr2line, "allow_addr2line");
   ParseFlag(str, &f->strip_path_prefix, "strip_path_prefix");
   ParseFlag(str, &f->fast_unwind_on_fatal, "fast_unwind_on_fatal");
   ParseFlag(str, &f->fast_unwind_on_malloc, "fast_unwind_on_malloc");
@@ -59,12 +63,13 @@ void ParseCommonFlagsFromString(CommonFlags *f, const char *str) {
   ParseFlag(str, &f->handle_segv, "handle_segv");
   ParseFlag(str, &f->allow_user_segv_handler, "allow_user_segv_handler");
   ParseFlag(str, &f->use_sigaltstack, "use_sigaltstack");
+  ParseFlag(str, &f->detect_deadlocks, "detect_deadlocks");
+  ParseFlag(str, &f->clear_shadow_mmap_threshold,
+            "clear_shadow_mmap_threshold");
 
   // Do a sanity check for certain flags.
   if (f->malloc_context_size < 1)
     f->malloc_context_size = 1;
-  if (!f->symbolize)
-    f->external_symbolizer_path = "";
 }
 
 static bool GetFlagValue(const char *env, const char *name,
@@ -136,6 +141,14 @@ void ParseFlag(const char *env, int *flag, const char *name) {
   if (!GetFlagValue(env, name, &value, &value_length))
     return;
   *flag = static_cast<int>(internal_atoll(value));
+}
+
+void ParseFlag(const char *env, uptr *flag, const char *name) {
+  const char *value;
+  int value_length;
+  if (!GetFlagValue(env, name, &value, &value_length))
+    return;
+  *flag = static_cast<uptr>(internal_atoll(value));
 }
 
 static LowLevelAllocator allocator_for_flags;

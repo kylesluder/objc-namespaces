@@ -13,7 +13,13 @@ include(LLVMParseArguments)
 # to use its support for building convenience "libraries" as a collection of
 # .o files. This is particularly useful in producing larger, more complex
 # runtime libraries.
-cmake_minimum_required(VERSION 2.8.8)
+if (NOT MSVC)
+  cmake_minimum_required(VERSION 2.8.8)
+else()
+  # Version 2.8.12.1 is required to build with Visual Studion 2013.
+  cmake_minimum_required(VERSION 2.8.12.1)
+endif()
+
 
 # Top level target used to build all compiler-rt libraries.
 add_custom_target(compiler-rt)
@@ -44,6 +50,8 @@ set(COMPILER_RT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(COMPILER_RT_DARWIN_SDK_SYSROOT ${COMPILER_RT_SOURCE_DIR}/SDKs/darwin)
 set(COMPILER_RT_LINUX_SDK_SYSROOT ${COMPILER_RT_SOURCE_DIR}/SDKs/linux)
 include(SanitizerUtils)
+
+set(COMPILER_RT_EXTRA_ANDROID_HEADERS ${COMPILER_RT_SOURCE_DIR}/third_party/android/include)
 
 # Detect whether the current target platform is 32-bit or 64-bit, and setup
 # the correct commandline flags needed to attempt to target 32-bit and 64-bit.
@@ -91,21 +99,25 @@ macro(test_target_arch arch)
   endif()
 endmacro()
 
-if("${LLVM_NATIVE_ARCH}" STREQUAL "X86")
-  if (NOT MSVC)
-    test_target_arch(x86_64 ${TARGET_64_BIT_CFLAGS})
+if(ANDROID_COMMON_FLAGS)
+  test_target_arch(arm_android "${ANDROID_COMMON_FLAGS}")
+else()
+  if("${LLVM_NATIVE_ARCH}" STREQUAL "X86")
+    if (NOT MSVC)
+      test_target_arch(x86_64 ${TARGET_64_BIT_CFLAGS})
+    endif()
+    test_target_arch(i386 ${TARGET_32_BIT_CFLAGS})
+  elseif("${LLVM_NATIVE_ARCH}" STREQUAL "PowerPC")
+    test_target_arch(powerpc64 ${TARGET_64_BIT_CFLAGS})
+  elseif("${LLVM_NATIVE_ARCH}" STREQUAL "ARM")
+    test_target_arch(arm "")
   endif()
-  test_target_arch(i386 ${TARGET_32_BIT_CFLAGS})
-elseif("${LLVM_NATIVE_ARCH}" STREQUAL "PowerPC")
-  test_target_arch(powerpc64 ${TARGET_64_BIT_CFLAGS})
-elseif("${LLVM_NATIVE_ARCH}" STREQUAL "ARM")
-  test_target_arch(arm "")
 endif()
 
 # We only support running instrumented tests when we're not cross compiling
-# and target a unix-like system. On Android we define the rules for building
-# unit tests, but don't execute them.
-if("${CMAKE_HOST_SYSTEM}" STREQUAL "${CMAKE_SYSTEM}" AND UNIX AND NOT ANDROID)
+# and target a unix-like system. We can run tests on Android even when we are
+# cross-compiling.
+if(("${CMAKE_HOST_SYSTEM}" STREQUAL "${CMAKE_SYSTEM}" AND UNIX) OR ANDROID)
   option(COMPILER_RT_CAN_EXECUTE_TESTS "Can we execute instrumented tests" ON)
 else()
   option(COMPILER_RT_CAN_EXECUTE_TESTS "Can we execute instrumented tests" OFF)
@@ -185,6 +197,8 @@ if (SUPPORTS_NO_NON_VIRTUAL_DTOR_FLAG)
 endif()
 check_cxx_compiler_flag(-Wglobal-constructors SUPPORTS_GLOBAL_CONSTRUCTORS_FLAG)
 # Not all sanitizers forbid global constructors.
+check_cxx_compiler_flag("-Werror -Wframe-larger-than=512"
+  SUPPORTS_FRAME_LARGER_THAN_FLAG)
 
 if(APPLE)
   # Obtain the iOS Simulator SDK path from xcodebuild.
@@ -217,22 +231,36 @@ endif()
 # support only subset of these (e.g. TSan works on x86_64 only).
 filter_available_targets(SANITIZER_COMMON_SUPPORTED_ARCH
   x86_64 i386 powerpc64 arm)
+filter_available_targets(ASAN_SUPPORTED_ARCH x86_64 i386 powerpc64)
+filter_available_targets(DFSAN_SUPPORTED_ARCH x86_64)
+filter_available_targets(LSAN_SUPPORTED_ARCH x86_64)
+filter_available_targets(MSAN_SUPPORTED_ARCH x86_64)
+filter_available_targets(TSAN_SUPPORTED_ARCH x86_64)
+filter_available_targets(UBSAN_SUPPORTED_ARCH x86_64 i386)
 
 add_subdirectory(include)
 
-set(SANITIZER_COMMON_LIT_TEST_DEPS
-  clang clang-headers FileCheck count not llvm-nm llvm-symbolizer
-  compiler-rt-headers)
-# Check code style when running lit tests for sanitizers.
-if(UNIX)
-  list(APPEND SANITIZER_COMMON_LIT_TEST_DEPS SanitizerLintCheck)
+# When ANDROID, we build tests with the host compiler (i.e. CMAKE_C_COMPILER),
+# and run tests with tools from the host toolchain.
+if (NOT ANDROID)
+  set(SANITIZER_COMMON_LIT_TEST_DEPS
+    clang clang-headers FileCheck count not llvm-nm llvm-symbolizer
+    compiler-rt-headers)
+  if(UNIX)
+    list(APPEND SANITIZER_COMMON_LIT_TEST_DEPS SanitizerLintCheck)
+  endif()
+endif()
+
+set(COMPILER_RT_LIBCXX_PATH ${LLVM_MAIN_SRC_DIR}/projects/libcxx)
+if(EXISTS ${COMPILER_RT_LIBCXX_PATH}/)
+  set(COMPILER_RT_HAS_LIBCXX_SOURCES TRUE)
+else()
+  set(COMPILER_RT_HAS_LIBCXX_SOURCES FALSE)
 endif()
 
 add_subdirectory(lib)
 
 if(LLVM_INCLUDE_TESTS)
-  # Currently the tests have not been ported to CMake, so disable this
-  # directory.
-  #
-  #add_subdirectory(test)
+  add_subdirectory(unittests)
 endif()
+add_subdirectory(test)

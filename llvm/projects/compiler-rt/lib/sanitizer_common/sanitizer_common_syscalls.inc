@@ -234,6 +234,7 @@ POST_SYSCALL(settimeofday)(long res, void *tv, void *tz) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(adjtimex)(void *txc_p) {}
 
 POST_SYSCALL(adjtimex)(long res, void *txc_p) {
@@ -241,6 +242,7 @@ POST_SYSCALL(adjtimex)(long res, void *txc_p) {
     if (txc_p) POST_WRITE(txc_p, struct_timex_sz);
   }
 }
+#endif
 
 PRE_SYSCALL(times)(void *tbuf) {}
 
@@ -386,24 +388,21 @@ PRE_SYSCALL(acct)(const void *name) {
 
 POST_SYSCALL(acct)(long res, const void *name) {}
 
-PRE_SYSCALL(capget)(void *header, void *dataptr) {}
+PRE_SYSCALL(capget)(void *header, void *dataptr) {
+  if (header) PRE_READ(header, __user_cap_header_struct_sz);
+}
 
 POST_SYSCALL(capget)(long res, void *header, void *dataptr) {
-  if (res >= 0) {
-    if (header) POST_WRITE(header, __user_cap_header_struct_sz);
+  if (res >= 0)
     if (dataptr) POST_WRITE(dataptr, __user_cap_data_struct_sz);
-  }
 }
 
 PRE_SYSCALL(capset)(void *header, const void *data) {
+  if (header) PRE_READ(header, __user_cap_header_struct_sz);
   if (data) PRE_READ(data, __user_cap_data_struct_sz);
 }
 
-POST_SYSCALL(capset)(long res, void *header, const void *data) {
-  if (res >= 0) {
-    if (header) POST_WRITE(header, __user_cap_header_struct_sz);
-  }
-}
+POST_SYSCALL(capset)(long res, void *header, const void *data) {}
 
 PRE_SYSCALL(personality)(long personality) {}
 
@@ -496,6 +495,7 @@ POST_SYSCALL(clock_gettime)(long res, long which_clock, void *tp) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(clock_adjtime)(long which_clock, void *tx) {}
 
 POST_SYSCALL(clock_adjtime)(long res, long which_clock, void *tx) {
@@ -503,6 +503,7 @@ POST_SYSCALL(clock_adjtime)(long res, long which_clock, void *tx) {
     if (tx) POST_WRITE(tx, struct_timex_sz);
   }
 }
+#endif
 
 PRE_SYSCALL(clock_getres)(long which_clock, void *tp) {}
 
@@ -920,6 +921,7 @@ POST_SYSCALL(newfstat)(long res, long fd, void *statbuf) {
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(ustat)(long dev, void *ubuf) {}
 
 POST_SYSCALL(ustat)(long res, long dev, void *ubuf) {
@@ -927,6 +929,7 @@ POST_SYSCALL(ustat)(long res, long dev, void *ubuf) {
     if (ubuf) POST_WRITE(ubuf, struct_ustat_sz);
   }
 }
+#endif  // !SANITIZER_ANDROID
 
 PRE_SYSCALL(stat64)(const void *filename, void *statbuf) {
   if (filename)
@@ -2082,6 +2085,7 @@ POST_SYSCALL(msgrcv)(long res, long msqid, void *msgp, long msgsz, long msgtyp,
   }
 }
 
+#if !SANITIZER_ANDROID
 PRE_SYSCALL(msgctl)(long msqid, long cmd, void *buf) {}
 
 POST_SYSCALL(msgctl)(long res, long msqid, long cmd, void *buf) {
@@ -2089,6 +2093,7 @@ POST_SYSCALL(msgctl)(long res, long msqid, long cmd, void *buf) {
     if (buf) POST_WRITE(buf, struct_msqid_ds_sz);
   }
 }
+#endif
 
 PRE_SYSCALL(semget)(long key, long nsems, long semflg) {}
 

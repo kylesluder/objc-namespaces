@@ -326,8 +326,25 @@ TEST(MemorySanitizer, Realloc) {
 TEST(MemorySanitizer, Calloc) {
   S4 *x = (int*)Ident(calloc(1, sizeof(S4)));
   EXPECT_NOT_POISONED(*x);  // Should not be poisoned.
-  // EXPECT_EQ(0, *x);
+  EXPECT_EQ(0, *x);
   free(x);
+}
+
+TEST(MemorySanitizer, CallocReturnsZeroMem) {
+  size_t sizes[] = {16, 1000, 10000, 100000, 2100000};
+  for (size_t s = 0; s < sizeof(sizes)/sizeof(sizes[0]); s++) {
+    size_t size = sizes[s];
+    for (size_t iter = 0; iter < 5; iter++) {
+      char *x = Ident((char*)calloc(1, size));
+      EXPECT_EQ(x[0], 0);
+      EXPECT_EQ(x[size - 1], 0);
+      EXPECT_EQ(x[size / 2], 0);
+      EXPECT_EQ(x[size / 3], 0);
+      EXPECT_EQ(x[size / 4], 0);
+      memset(x, 0x42, size);
+      free(Ident(x));
+    }
+  }
 }
 
 TEST(MemorySanitizer, AndOr) {
@@ -2989,6 +3006,20 @@ TEST(MemorySanitizer, getpwuid) {
   ASSERT_EQ(p->pw_uid, 0);
 }
 
+TEST(MemorySanitizer, getpwuid_r) {
+  struct passwd pwd;
+  struct passwd *pwdres;
+  char buf[10000];
+  int res = getpwuid_r(0, &pwd, buf, sizeof(buf), &pwdres);
+  ASSERT_EQ(0, res);
+  EXPECT_NOT_POISONED(pwd.pw_name);
+  ASSERT_TRUE(pwd.pw_name != NULL);
+  EXPECT_NOT_POISONED(pwd.pw_name[0]);
+  EXPECT_NOT_POISONED(pwd.pw_uid);
+  ASSERT_EQ(pwd.pw_uid, 0);
+  EXPECT_NOT_POISONED(pwdres);
+}
+
 TEST(MemorySanitizer, getpwnam_r) {
   struct passwd pwd;
   struct passwd *pwdres;
@@ -3000,6 +3031,7 @@ TEST(MemorySanitizer, getpwnam_r) {
   EXPECT_NOT_POISONED(pwd.pw_name[0]);
   EXPECT_NOT_POISONED(pwd.pw_uid);
   ASSERT_EQ(pwd.pw_uid, 0);
+  EXPECT_NOT_POISONED(pwdres);
 }
 
 TEST(MemorySanitizer, getpwnam_r_positive) {
@@ -3023,6 +3055,7 @@ TEST(MemorySanitizer, getgrnam_r) {
   ASSERT_TRUE(grp.gr_name != NULL);
   EXPECT_NOT_POISONED(grp.gr_name[0]);
   EXPECT_NOT_POISONED(grp.gr_gid);
+  EXPECT_NOT_POISONED(grpres);
 }
 
 TEST(MemorySanitizer, getgroups) {

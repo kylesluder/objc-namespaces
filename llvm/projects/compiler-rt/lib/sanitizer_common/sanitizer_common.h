@@ -260,6 +260,19 @@ INLINE uptr MostSignificantSetBitIndex(uptr x) {
   return up;
 }
 
+INLINE uptr LeastSignificantSetBitIndex(uptr x) {
+  CHECK_NE(x, 0U);
+  unsigned long up;  // NOLINT
+#if !SANITIZER_WINDOWS || defined(__clang__) || defined(__GNUC__)
+  up = __builtin_ctzl(x);
+#elif defined(_WIN64)
+  _BitScanForward64(&up, x);
+#else
+  _BitScanForward(&up, x);
+#endif
+  return up;
+}
+
 INLINE bool IsPowerOfTwo(uptr x) {
   return (x & (x - 1)) == 0;
 }
@@ -509,9 +522,11 @@ F IndirectExternCall(F f) {
 #if SANITIZER_ANDROID
 void AndroidLogWrite(const char *buffer);
 void GetExtraActivationFlags(char *buf, uptr size);
+void SanitizerInitializeUnwinder();
 #else
 INLINE void AndroidLogWrite(const char *buffer_unused) {}
 INLINE void GetExtraActivationFlags(char *buf, uptr size) { *buf = '\0'; }
+INLINE void SanitizerInitializeUnwinder() {}
 #endif
 }  // namespace __sanitizer
 

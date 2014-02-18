@@ -917,6 +917,7 @@ INTERCEPTOR(int, getpwnam_r, const char *name, void *pwd, char *buf,
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, pwd, struct_passwd_sz);
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, buf, buflen);
   }
+  if (result) COMMON_INTERCEPTOR_WRITE_RANGE(ctx, result, sizeof(*result));
   return res;
 }
 INTERCEPTOR(int, getpwuid_r, u32 uid, void *pwd, char *buf, SIZE_T buflen,
@@ -928,6 +929,7 @@ INTERCEPTOR(int, getpwuid_r, u32 uid, void *pwd, char *buf, SIZE_T buflen,
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, pwd, struct_passwd_sz);
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, buf, buflen);
   }
+  if (result) COMMON_INTERCEPTOR_WRITE_RANGE(ctx, result, sizeof(*result));
   return res;
 }
 INTERCEPTOR(int, getgrnam_r, const char *name, void *grp, char *buf,
@@ -940,6 +942,7 @@ INTERCEPTOR(int, getgrnam_r, const char *name, void *grp, char *buf,
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, grp, struct_group_sz);
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, buf, buflen);
   }
+  if (result) COMMON_INTERCEPTOR_WRITE_RANGE(ctx, result, sizeof(*result));
   return res;
 }
 INTERCEPTOR(int, getgrgid_r, u32 gid, void *grp, char *buf, SIZE_T buflen,
@@ -951,6 +954,7 @@ INTERCEPTOR(int, getgrgid_r, u32 gid, void *grp, char *buf, SIZE_T buflen,
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, grp, struct_group_sz);
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, buf, buflen);
   }
+  if (result) COMMON_INTERCEPTOR_WRITE_RANGE(ctx, result, sizeof(*result));
   return res;
 }
 #define INIT_GETPWNAM_R_AND_FRIENDS      \
@@ -1176,6 +1180,19 @@ INTERCEPTOR(int, wait3, int *status, int options, void *rusage) {
   }
   return res;
 }
+#if SANITIZER_ANDROID
+INTERCEPTOR(int, __wait4, int pid, int *status, int options, void *rusage) {
+  void *ctx;
+  COMMON_INTERCEPTOR_ENTER(ctx, __wait4, pid, status, options, rusage);
+  int res = REAL(__wait4)(pid, status, options, rusage);
+  if (res != -1) {
+    if (status) COMMON_INTERCEPTOR_WRITE_RANGE(ctx, status, sizeof(*status));
+    if (rusage) COMMON_INTERCEPTOR_WRITE_RANGE(ctx, rusage, struct_rusage_sz);
+  }
+  return res;
+}
+#define INIT_WAIT4 COMMON_INTERCEPT_FUNCTION(__wait4);
+#else
 INTERCEPTOR(int, wait4, int pid, int *status, int options, void *rusage) {
   void *ctx;
   COMMON_INTERCEPTOR_ENTER(ctx, wait4, pid, status, options, rusage);
@@ -1186,14 +1203,16 @@ INTERCEPTOR(int, wait4, int pid, int *status, int options, void *rusage) {
   }
   return res;
 }
+#define INIT_WAIT4 COMMON_INTERCEPT_FUNCTION(wait4);
+#endif  // SANITIZER_ANDROID
 #define INIT_WAIT                     \
   COMMON_INTERCEPT_FUNCTION(wait);    \
   COMMON_INTERCEPT_FUNCTION(waitid);  \
   COMMON_INTERCEPT_FUNCTION(waitpid); \
-  COMMON_INTERCEPT_FUNCTION(wait3);   \
-  COMMON_INTERCEPT_FUNCTION(wait4);
+  COMMON_INTERCEPT_FUNCTION(wait3);
 #else
 #define INIT_WAIT
+#define INIT_WAIT4
 #endif
 
 #if SANITIZER_INTERCEPT_INET
@@ -3250,6 +3269,36 @@ INTERCEPTOR(unsigned int, if_nametoindex, const char* ifname) {
 #define INIT_IF_INDEXTONAME
 #endif
 
+#if SANITIZER_INTERCEPT_CAPGET
+INTERCEPTOR(int, capget, void *hdrp, void *datap) {
+  void *ctx;
+  COMMON_INTERCEPTOR_ENTER(ctx, capget, hdrp, datap);
+  if (hdrp)
+    COMMON_INTERCEPTOR_READ_RANGE(ctx, hdrp, __user_cap_header_struct_sz);
+  int res = REAL(capget)(hdrp, datap);
+  if (res == 0 && datap)
+    COMMON_INTERCEPTOR_WRITE_RANGE(ctx, datap, __user_cap_data_struct_sz);
+  // We can also return -1 and write to hdrp->version if the version passed in
+  // hdrp->version is unsupported. But that's not a trivial condition to check,
+  // and anyway COMMON_INTERCEPTOR_READ_RANGE protects us to some extent.
+  return res;
+}
+INTERCEPTOR(int, capset, void *hdrp, const void *datap) {
+  void *ctx;
+  COMMON_INTERCEPTOR_ENTER(ctx, capset, hdrp, datap);
+  if (hdrp)
+    COMMON_INTERCEPTOR_READ_RANGE(ctx, hdrp, __user_cap_header_struct_sz);
+  if (datap)
+    COMMON_INTERCEPTOR_READ_RANGE(ctx, datap, __user_cap_data_struct_sz);
+  return REAL(capset)(hdrp, datap);
+}
+#define INIT_CAPGET                  \
+  COMMON_INTERCEPT_FUNCTION(capget); \
+  COMMON_INTERCEPT_FUNCTION(capset);
+#else
+#define INIT_CAPGET
+#endif
+
 #define SANITIZER_COMMON_INTERCEPTORS_INIT \
   INIT_TEXTDOMAIN;                         \
   INIT_STRCMP;                             \
@@ -3284,6 +3333,7 @@ INTERCEPTOR(unsigned int, if_nametoindex, const char* ifname) {
   INIT_TIME;                               \
   INIT_GLOB;                               \
   INIT_WAIT;                               \
+  INIT_WAIT4;                              \
   INIT_INET;                               \
   INIT_PTHREAD_GETSCHEDPARAM;              \
   INIT_GETADDRINFO;                        \
@@ -3370,5 +3420,6 @@ INTERCEPTOR(unsigned int, if_nametoindex, const char* ifname) {
   INIT_GETXATTR;                           \
   INIT_GETRESID;                           \
   INIT_GETIFADDRS;                         \
-  INIT_IF_INDEXTONAME;
+  INIT_IF_INDEXTONAME;                     \
+  INIT_CAPGET;
 /**/

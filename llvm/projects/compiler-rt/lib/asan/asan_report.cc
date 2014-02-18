@@ -45,11 +45,9 @@ void AppendToErrorMessageBuffer(const char *buffer) {
 }
 
 // ---------------------- Decorator ------------------------------ {{{1
-class Decorator: private __sanitizer::AnsiColorDecorator {
+class Decorator: public __sanitizer::SanitizerCommonDecorator {
  public:
-  Decorator() : __sanitizer::AnsiColorDecorator(PrintsToTtyCached()) { }
-  const char *Warning()    { return Red(); }
-  const char *EndWarning() { return Default(); }
+  Decorator() : SanitizerCommonDecorator() { }
   const char *Access()     { return Blue(); }
   const char *EndAccess()  { return Default(); }
   const char *Location()   { return Green(); }
@@ -570,7 +568,7 @@ class ScopedInErrorReport {
   }
 };
 
-void ReportSIGSEGV(uptr pc, uptr sp, uptr bp, uptr addr) {
+void ReportSIGSEGV(uptr pc, uptr sp, uptr bp, void *context, uptr addr) {
   ScopedInErrorReport in_report;
   Decorator d;
   Printf("%s", d.Warning());
@@ -579,7 +577,7 @@ void ReportSIGSEGV(uptr pc, uptr sp, uptr bp, uptr addr) {
              (void*)addr, (void*)pc, (void*)sp, (void*)bp,
              GetCurrentTidOrInvalid());
   Printf("%s", d.EndWarning());
-  GET_STACK_TRACE_FATAL(pc, bp);
+  GET_STACK_TRACE_SIGNAL(pc, bp, context);
   stack.Print();
   Printf("AddressSanitizer can not provide additional info.\n");
   ReportErrorSummary("SEGV", &stack);

@@ -44,11 +44,14 @@ set(SANITIZER_HEADERS
   sanitizer_atomic.h
   sanitizer_atomic_clang.h
   sanitizer_atomic_msvc.h
+  sanitizer_bitvector.h
+  sanitizer_bvgraph.h
   sanitizer_common.h
   sanitizer_common_interceptors.inc
   sanitizer_common_interceptors_ioctl.inc
   sanitizer_common_interceptors_format.inc
   sanitizer_common_syscalls.inc
+  sanitizer_deadlock_detector.h
   sanitizer_flags.h
   sanitizer_internal_defs.h
   sanitizer_lfstack.h
@@ -77,10 +80,7 @@ set(SANITIZER_HEADERS
 
 set(SANITIZER_COMMON_DEFINITIONS)
 
-if(ANDROID)
-  list(APPEND SANITIZER_COMMON_DEFINITIONS
-    SANITIZER_NEEDS_SEGV=0)
-elseif(MSVC)
+if(MSVC)
   list(APPEND SANITIZER_COMMON_DEFINITIONS
     SANITIZER_NEEDS_SEGV=0)
 else()
@@ -98,6 +98,9 @@ else()
     /GR-)
 endif()
 
+if(SUPPORTS_FRAME_LARGER_THAN_FLAG)
+  list(APPEND SANITIZER_CFLAGS -Wframe-larger-than=512)
+endif()
 if(SUPPORTS_GLOBAL_CONSTRUCTORS_FLAG)
   list(APPEND SANITIZER_CFLAGS -Wglobal-constructors)
 endif()

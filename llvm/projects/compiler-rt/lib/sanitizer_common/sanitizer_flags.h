@@ -20,6 +20,7 @@ namespace __sanitizer {
 
 void ParseFlag(const char *env, bool *flag, const char *name);
 void ParseFlag(const char *env, int *flag, const char *name);
+void ParseFlag(const char *env, uptr *flag, const char *name);
 void ParseFlag(const char *env, const char **flag, const char *name);
 
 struct CommonFlags {
@@ -30,6 +31,10 @@ struct CommonFlags {
   // in PATH. If it is empty (or if "symbolize" is false), external symbolizer
   // will not be started.
   const char *external_symbolizer_path;
+  // If set, allows online symbolizer to run addr2line binary to symbolize
+  // stack traces (addr2line will only be used if llvm-symbolizer binary is not
+  // available.
+  bool allow_addr2line;
   // Strips this prefix from file paths in error reports.
   const char *strip_path_prefix;
   // Use fast (frame-pointer-based) unwinder on fatal errors (if available).
@@ -66,6 +71,11 @@ struct CommonFlags {
   bool allow_user_segv_handler;
   // If set, uses alternate stack for signal handling.
   bool use_sigaltstack;
+  // If set, deadlock detection is enabled.
+  bool detect_deadlocks;
+  // Large shadow regions are zero-filled using mmap(NORESERVE) instead of
+  // memset. This is the threshold size in bytes.
+  uptr clear_shadow_mmap_threshold;
 };
 
 inline CommonFlags *common_flags() {

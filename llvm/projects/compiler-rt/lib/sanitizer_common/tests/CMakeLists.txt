@@ -3,7 +3,10 @@ include(CompilerRTCompile)
 set(SANITIZER_UNITTESTS
   sanitizer_allocator_test.cc
   sanitizer_atomic_test.cc
+  sanitizer_bitvector_test.cc
+  sanitizer_bvgraph_test.cc
   sanitizer_common_test.cc
+  sanitizer_deadlock_detector_test.cc
   sanitizer_flags_test.cc
   sanitizer_format_interceptor_test.cc
   sanitizer_ioctl_test.cc

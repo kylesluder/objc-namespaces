@@ -45,11 +45,14 @@
 #include <time.h>
 #include <wchar.h>
 
+#if !SANITIZER_ANDROID
+#include <sys/mount.h>
+#endif
+
 #if SANITIZER_LINUX
 #include <mntent.h>
 #include <netinet/ether.h>
 #include <utime.h>
-#include <sys/mount.h>
 #include <sys/ptrace.h>
 #include <sys/sysinfo.h>
 #include <sys/vt.h>
@@ -96,7 +99,6 @@
 #include <linux/serial.h>
 #include <sys/msg.h>
 #include <sys/ipc.h>
-#include <sys/shm.h>
 #endif // SANITIZER_LINUX && !SANITIZER_ANDROID
 
 #if SANITIZER_ANDROID
@@ -116,7 +118,6 @@
 #if SANITIZER_MAC
 #include <net/ethernet.h>
 #include <sys/filio.h>
-#include <sys/mount.h>
 #include <sys/sockio.h>
 #endif
 
@@ -169,10 +170,10 @@ namespace __sanitizer {
   unsigned struct_old_utsname_sz = sizeof(struct old_utsname);
   unsigned struct_oldold_utsname_sz = sizeof(struct oldold_utsname);
   unsigned struct_itimerspec_sz = sizeof(struct itimerspec);
-  unsigned struct_ustat_sz = sizeof(struct ustat);
 #endif // SANITIZER_LINUX
 
 #if SANITIZER_LINUX && !SANITIZER_ANDROID
+  unsigned struct_ustat_sz = sizeof(struct ustat);
   unsigned struct_rlimit64_sz = sizeof(struct rlimit64);
   unsigned struct_timex_sz = sizeof(struct timex);
   unsigned struct_msqid_ds_sz = sizeof(struct msqid_ds);
@@ -768,6 +769,7 @@ namespace __sanitizer {
   unsigned IOCTL_TIOCSSERIAL = TIOCSSERIAL;
 #endif
 
+  const int errno_EINVAL = EINVAL;
 // EOWNERDEAD is not present in some older platforms.
 #if defined(EOWNERDEAD)
   extern const int errno_EOWNERDEAD = EOWNERDEAD;

@@ -63,6 +63,10 @@ namespace __sanitizer {
   const unsigned struct___old_kernel_stat_sz = 32;
   const unsigned struct_kernel_stat_sz = 64;
   const unsigned struct_kernel_stat64_sz = 104;
+#elif defined(__aarch64__)
+  const unsigned struct___old_kernel_stat_sz = 32;
+  const unsigned struct_kernel_stat_sz = 128;
+  const unsigned struct_kernel_stat64_sz = 104;
 #elif defined(__powerpc__) && !defined(__powerpc64__)
   const unsigned struct___old_kernel_stat_sz = 32;
   const unsigned struct_kernel_stat_sz = 72;
@@ -78,21 +82,17 @@ namespace __sanitizer {
     // More fields that vary with the kernel version.
   };
 
-  extern unsigned struct_utimbuf_sz;
-  extern unsigned struct_new_utsname_sz;
-  extern unsigned struct_old_utsname_sz;
-  extern unsigned struct_oldold_utsname_sz;
-  extern unsigned struct_msqid_ds_sz;
-  extern unsigned struct_mq_attr_sz;
-  extern unsigned struct_timex_sz;
-  extern unsigned struct_ustat_sz;
-
   extern unsigned struct_rlimit_sz;
   extern unsigned struct_epoll_event_sz;
   extern unsigned struct_sysinfo_sz;
   extern unsigned struct_timespec_sz;
   extern unsigned __user_cap_header_struct_sz;
   extern unsigned __user_cap_data_struct_sz;
+  extern unsigned struct_utimbuf_sz;
+  extern unsigned struct_new_utsname_sz;
+  extern unsigned struct_old_utsname_sz;
+  extern unsigned struct_oldold_utsname_sz;
+
   const unsigned old_sigset_t_sz = sizeof(unsigned long);
   const unsigned struct_kexec_segment_sz = 4 * sizeof(unsigned long);
 
@@ -134,7 +134,11 @@ namespace __sanitizer {
 #endif // SANITIZER_LINUX
 
 #if SANITIZER_LINUX && !SANITIZER_ANDROID
+  extern unsigned struct_ustat_sz;
   extern unsigned struct_rlimit64_sz;
+  extern unsigned struct_timex_sz;
+  extern unsigned struct_msqid_ds_sz;
+  extern unsigned struct_mq_attr_sz;
   extern unsigned struct_statvfs_sz;
   extern unsigned struct_statvfs64_sz;
 
@@ -343,7 +347,7 @@ namespace __sanitizer {
   typedef long __sanitizer___kernel_off_t;
 #endif
 
-#if defined(__powerpc__)
+#if defined(__powerpc__) || defined(__aarch64__)
   typedef unsigned int __sanitizer___kernel_old_uid_t;
   typedef unsigned int __sanitizer___kernel_old_gid_t;
 #else
@@ -1048,6 +1052,7 @@ namespace __sanitizer {
   extern unsigned IOCTL_TIOCSSERIAL;
 #endif
 
+  extern const int errno_EINVAL;
   extern const int errno_EOWNERDEAD;
 }  // namespace __sanitizer
 
