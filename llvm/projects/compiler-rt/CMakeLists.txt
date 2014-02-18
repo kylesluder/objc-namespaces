@@ -217,14 +217,22 @@ if(APPLE)
   else()
     set(SANITIZER_MIN_OSX_VERSION 10.6)
   endif()
-  set(DARWIN_osx_CFLAGS -mmacosx-version-min=${SANITIZER_MIN_OSX_VERSION})
-  set(DARWIN_iossim_CFLAGS 
-    -mios-simulator-version-min=7.0 -isysroot ${IOSSIM_SDK_DIR})
-  set(DARWIN_osx_LINKFLAGS)
-  set(DARWIN_iossim_LINKFLAGS
-    -Wl,-ios_simulator_version_min,7.0.0
-    -mios-simulator-version-min=7.0
-    -isysroot ${IOSSIM_SDK_DIR})
+
+  if (CMAKE_GENERATOR STREQUAL "Xcode")
+    set(DARWIN_osx_XCODE_ATTRIBUTE_MACOSX_DEPLOYMENT_TARGET ${SANITIZER_MIN_OSX_VERSION})
+    if (IOSSIM_SDK_DIR)
+      set(DARWIN_ios_XCODE_ATTRIBUTE_SDKROOT iphonesimulator)
+    endif()
+  else()
+    set(DARWIN_osx_CFLAGS -mmacosx-version-min=${SANITIZER_MIN_OSX_VERSION})
+    set(DARWIN_iossim_CFLAGS 
+      -mios-simulator-version-min=7.0 -isysroot ${IOSSIM_SDK_DIR})
+    set(DARWIN_osx_LINKFLAGS)
+    set(DARWIN_iossim_LINKFLAGS
+      -Wl,-ios_simulator_version_min,7.0.0
+      -mios-simulator-version-min=7.0
+      -isysroot ${IOSSIM_SDK_DIR})
+  endif()
 endif()
 
 # Architectures supported by Sanitizer runtimes. Specific sanitizers may
