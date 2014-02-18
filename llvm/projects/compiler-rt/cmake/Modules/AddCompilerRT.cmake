@@ -58,7 +58,6 @@ macro(add_compiler_rt_static_runtime name arch)
     # Add installation command.
     install(TARGETS ${name}
       ARCHIVE DESTINATION ${COMPILER_RT_LIBRARY_INSTALL_DIR})
-    add_dependencies(compiler-rt ${name})
   else()
     message(FATAL_ERROR "Archtecture ${arch} can't be targeted")
   endif()
@@ -81,7 +80,6 @@ macro(add_compiler_rt_osx_static_runtime name)
     ARCHIVE_OUTPUT_DIRECTORY ${COMPILER_RT_LIBRARY_OUTPUT_DIR})
   install(TARGETS ${name}
     ARCHIVE DESTINATION ${COMPILER_RT_LIBRARY_INSTALL_DIR})
-  add_dependencies(compiler-rt ${name})
 endmacro()
 
 # Adds dynamic runtime library on osx/iossim, which supports multiple
@@ -104,7 +102,6 @@ macro(add_compiler_rt_darwin_dynamic_runtime name os)
     LIBRARY_OUTPUT_DIRECTORY ${COMPILER_RT_LIBRARY_OUTPUT_DIR})
   install(TARGETS ${name}
     LIBRARY DESTINATION ${COMPILER_RT_LIBRARY_INSTALL_DIR})
-  add_dependencies(compiler-rt ${name})
 endmacro()
 
 # Unittests support.
@@ -136,10 +133,10 @@ endmacro()
 
 macro(add_compiler_rt_resource_file target_name file_name)
   set(src_file "${CMAKE_CURRENT_SOURCE_DIR}/${file_name}")
-  set(dst_file "${CLANG_RESOURCE_DIR}/${file_name}")
+  set(dst_file "${COMPILER_RT_OUTPUT_DIR}/${file_name}")
   add_custom_target(${target_name}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${src_file} ${dst_file}
     DEPENDS ${file_name})
   # Install in Clang resource directory.
-  install(FILES ${file_name} DESTINATION ${LIBCLANG_INSTALL_PATH})
+  install(FILES ${file_name} DESTINATION ${COMPILER_RT_INSTALL_PATH})
 endmacro()

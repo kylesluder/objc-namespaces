@@ -28,15 +28,8 @@ if(ANDROID)
   include_directories(${COMPILER_RT_EXTRA_ANDROID_HEADERS})
 endif()
 
-if (NOT MSVC)
-  set(ASAN_CFLAGS
-    ${SANITIZER_COMMON_CFLAGS}
-    -fno-rtti)
-else()
-  set(ASAN_CFLAGS
-    ${SANITIZER_COMMON_CFLAGS}
-    /GR-)
-endif()
+set(ASAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
+append_no_rtti_flag(ASAN_CFLAGS)
 
 set(ASAN_COMMON_DEFINITIONS
   ASAN_HAS_EXCEPTIONS=1)
@@ -134,6 +127,7 @@ endif()
 
 add_compiler_rt_resource_file(asan_blacklist asan_blacklist.txt)
 add_dependencies(asan asan_blacklist)
+add_dependencies(compiler-rt asan)
 
 if(LLVM_INCLUDE_TESTS)
   add_subdirectory(tests)

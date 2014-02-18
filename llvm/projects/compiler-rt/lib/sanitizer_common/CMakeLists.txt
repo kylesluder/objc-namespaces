@@ -88,23 +88,13 @@ else()
     SANITIZER_NEEDS_SEGV=1)
 endif()
 
-if (NOT MSVC)
-  set(SANITIZER_CFLAGS
-    ${SANITIZER_COMMON_CFLAGS}
-    -fno-rtti)
-else()
-  set(SANITIZER_CFLAGS
-    ${SANITIZER_COMMON_CFLAGS}
-    /GR-)
-endif()
+set(SANITIZER_CFLAGS ${SANITIZER_COMMON_CFLAGS})
+append_no_rtti_flag(SANITIZER_CFLAGS)
 
-if(SUPPORTS_FRAME_LARGER_THAN_FLAG)
-  list(APPEND SANITIZER_CFLAGS -Wframe-larger-than=512)
-endif()
-if(SUPPORTS_GLOBAL_CONSTRUCTORS_FLAG)
-  list(APPEND SANITIZER_CFLAGS -Wglobal-constructors)
-endif()
+append_if(SANITIZER_CFLAGS COMPILER_RT_HAS_WFRAME_LARGER_THAN_FLAG -Wframe-larger-than=512)
+append_if(SANITIZER_CFLAGS COMPILER_RT_HAS_WGLOBAL_CONSTRUCTORS_FLAG -Wglobal-constructors)
 
+add_custom_target(sanitizer_common)
 set(SANITIZER_RUNTIME_LIBRARIES)
 if(APPLE)
   # Build universal binary on APPLE.
@@ -133,15 +123,18 @@ else()
     add_compiler_rt_object_library(RTSanitizerCommonLibc ${arch}
       SOURCES ${SANITIZER_LIBCDEP_SOURCES} CFLAGS ${SANITIZER_CFLAGS}
       DEFS ${SANITIZER_COMMON_DEFINITIONS})
+    list(APPEND SANITIZER_RUNTIME_LIBRARIES RTSanitizerCommon.${arch}
+                                            RTSanitizerCommonLibc.${arch})
     add_compiler_rt_static_runtime(clang_rt.san-${arch} ${arch}
       SOURCES $<TARGET_OBJECTS:RTSanitizerCommon.${arch}>
               $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>
       CFLAGS ${SANITIZER_CFLAGS}
       DEFS ${SANITIZER_COMMON_DEFINITIONS})
-    list(APPEND SANITIZER_RUNTIME_LIBRARIES RTSanitizerCommon.${arch}
-                                            RTSanitizerCommonLibc.${arch})
+    add_dependencies(sanitizer_common clang_rt.san-${arch})
   endforeach()
 endif()
+
+add_dependencies(compiler-rt sanitizer_common)
 
 # Unit tests for common sanitizer runtime.
 if(LLVM_INCLUDE_TESTS)

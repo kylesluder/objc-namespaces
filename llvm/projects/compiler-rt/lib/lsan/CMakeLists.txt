@@ -1,8 +1,7 @@
 include_directories(..)
 
-set(LSAN_CFLAGS
-  ${SANITIZER_COMMON_CFLAGS}
-  -fno-rtti)
+set(LSAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
+append_no_rtti_flag(LSAN_CFLAGS)
 
 set(LSAN_COMMON_SOURCES
   lsan_common.cc
@@ -49,3 +48,5 @@ elseif(NOT ANDROID)
     add_dependencies(lsan clang_rt.lsan-${arch})
   endforeach()
 endif()
+
+add_dependencies(compiler-rt lsan)

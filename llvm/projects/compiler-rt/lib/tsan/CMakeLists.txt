@@ -2,20 +2,15 @@
 
 include_directories(..)
 
+set(TSAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
 # SANITIZER_COMMON_CFLAGS contains -fPIC, but it's performance-critical for
 # TSan runtime to be built with -fPIE to reduce the number of register spills.
-set(TSAN_CFLAGS
-  ${SANITIZER_COMMON_CFLAGS}
-  -fPIE
-  -fno-rtti)
+append_if(TSAN_CFLAGS COMPILER_RT_HAS_FPIE_FLAG -fPIE)
+append_no_rtti_flag(TSAN_CFLAGS)
 
 set(TSAN_RTL_CFLAGS ${TSAN_CFLAGS})
-if(SUPPORTS_FRAME_LARGER_THAN_FLAG)
-  list(APPEND TSAN_RTL_CFLAGS -Wframe-larger-than=512)
-endif()
-if(SUPPORTS_GLOBAL_CONSTRUCTORS_FLAG)
-  list(APPEND TSAN_RTL_CFLAGS -Wglobal-constructors)
-endif()
+append_if(TSAN_RTL_CFLAGS COMPILER_RT_HAS_WFRAME_LARGER_THAN_FLAG -Wframe-larger-than=512)
+append_if(TSAN_RTL_CFLAGS COMPILER_RT_HAS_WGLOBAL_CONSTRUCTORS_FLAG -Wglobal-constructors)
 # FIXME: Add support for --sysroot=. compile flag:
 
 if("${CMAKE_BUILD_TYPE}" EQUAL "Release")
@@ -75,6 +70,8 @@ if(CAN_TARGET_x86_64 AND UNIX AND NOT APPLE)
   add_dependencies(tsan clang_rt.tsan-${arch}
     clang_rt.tsan-${arch}-symbols)
 endif()
+
+add_dependencies(compiler-rt tsan)
 
 if(LLVM_INCLUDE_TESTS)
   add_subdirectory(tests)
