@@ -651,6 +651,8 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
 
   if (LangOpts.getStackProtector() == LangOptions::SSPOn)
     B.addAttribute(llvm::Attribute::StackProtect);
+  else if (LangOpts.getStackProtector() == LangOptions::SSPStrong)
+    B.addAttribute(llvm::Attribute::StackProtectStrong);
   else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
     B.addAttribute(llvm::Attribute::StackProtectReq);
 
@@ -1575,6 +1577,12 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
 
   if (AddrSpace != Ty->getAddressSpace())
     return llvm::ConstantExpr::getAddrSpaceCast(GV, Ty);
+
+  if (getTarget().getTriple().getArch() == llvm::Triple::xcore &&
+      D->getLanguageLinkage() == CLanguageLinkage &&
+      D->getType().isConstant(Context) &&
+      isExternallyVisible(D->getLinkageAndVisibility().getLinkage()))
+    GV->setSection(".cp.rodata");
 
   return GV;
 }
@@ -2881,7 +2889,6 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
     break;
     // No code generation needed.
   case Decl::UsingShadow:
-  case Decl::Using:
   case Decl::ClassTemplate:
   case Decl::VarTemplate:
   case Decl::VarTemplatePartialSpecialization:
@@ -2890,6 +2897,10 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
   case Decl::Block:
   case Decl::Empty:
     break;
+  case Decl::Using:          // using X; [C++]
+    if (CGDebugInfo *DI = getModuleDebugInfo())
+        DI->EmitUsingDecl(cast<UsingDecl>(*D));
+    return;
   case Decl::NamespaceAlias:
     if (CGDebugInfo *DI = getModuleDebugInfo())
         DI->EmitNamespaceAlias(cast<NamespaceAliasDecl>(*D));

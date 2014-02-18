@@ -571,6 +571,7 @@ def fmsc_version : Joined<["-"], "fmsc-version=">, Group<f_Group>, Flags<[CC1Opt
 def fdelayed_template_parsing : Flag<["-"], "fdelayed-template-parsing">, Group<f_Group>,
   HelpText<"Parse templated function definitions at the end of the "
            "translation unit">,  Flags<[CC1Option]>;
+def fms_memptr_rep_EQ : Joined<["-"], "fms-memptr-rep=">, Group<f_Group>, Flags<[CC1Option]>;
 def fmodules_cache_path : Joined<["-"], "fmodules-cache-path=">, Group<i_Group>,
   Flags<[DriverOption, CC1Option]>, MetaVarName<"<directory>">,
   HelpText<"Specify the module cache path">;
@@ -580,6 +581,13 @@ def fmodules_prune_interval : Joined<["-"], "fmodules-prune-interval=">, Group<i
 def fmodules_prune_after : Joined<["-"], "fmodules-prune-after=">, Group<i_Group>,
   Flags<[CC1Option]>, MetaVarName<"<seconds>">,
   HelpText<"Specify the interval (in seconds) after which a module file will be considered unused">;
+def fbuild_session_timestamp : Joined<["-"], "fbuild-session-timestamp=">,
+  Group<i_Group>, Flags<[CC1Option]>, MetaVarName<"<time since Epoch in seconds>">,
+  HelpText<"Time when the current build session started">;
+def fmodules_validate_once_per_build_session : Flag<["-"], "fmodules-validate-once-per-build-session">,
+  Group<i_Group>, Flags<[CC1Option]>,
+  HelpText<"Don't verify input files for the modules if the module has been "
+           "successfully validate or loaded during this build session">;
 def fmodules : Flag <["-"], "fmodules">, Group<f_Group>,
   Flags<[DriverOption, CC1Option]>,
   HelpText<"Enable the 'modules' language feature">;
@@ -675,7 +683,8 @@ def fno_show_source_location : Flag<["-"], "fno-show-source-location">, Group<f_
   Flags<[CC1Option]>, HelpText<"Do not include source location information with diagnostics">;
 def fno_spell_checking : Flag<["-"], "fno-spell-checking">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Disable spell-checking">;
-def fno_stack_protector : Flag<["-"], "fno-stack-protector">, Group<f_Group>;
+def fno_stack_protector : Flag<["-"], "fno-stack-protector">, Group<f_Group>,
+  HelpText<"Disable the use of stack protectors">;
 def fno_strict_aliasing : Flag<["-"], "fno-strict-aliasing">, Group<f_Group>;
 def fstruct_path_tbaa : Flag<["-"], "fstruct-path-tbaa">, Group<f_Group>;
 def fno_struct_path_tbaa : Flag<["-"], "fno-struct-path-tbaa">, Group<f_Group>;
@@ -773,8 +782,12 @@ def fsigned_char : Flag<["-"], "fsigned-char">, Group<f_Group>;
 def fno_signed_char : Flag<["-"], "fno-signed-char">, Flags<[CC1Option]>,
     Group<clang_ignored_f_Group>, HelpText<"Char is unsigned">;
 def fsplit_stack : Flag<["-"], "fsplit-stack">, Group<f_Group>;
-def fstack_protector_all : Flag<["-"], "fstack-protector-all">, Group<f_Group>;
-def fstack_protector : Flag<["-"], "fstack-protector">, Group<f_Group>;
+def fstack_protector_all : Flag<["-"], "fstack-protector-all">, Group<f_Group>,
+  HelpText<"Force the usage of stack protectors for all functions">;
+def fstack_protector_strong : Flag<["-"], "fstack-protector-strong">, Group<f_Group>,
+  HelpText<"Use a strong heuristic to apply stack protectors to functions">;
+def fstack_protector : Flag<["-"], "fstack-protector">, Group<f_Group>,
+  HelpText<"Enable stack protectors for functions potentially vulnerable to stack smashing">;
 def fstandalone_debug : Flag<["-"], "fstandalone-debug">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Emit full debug info for all types used by the program">;
 def fno_standalone_debug : Flag<["-"], "fno-standalone-debug">, Group<f_Group>, Flags<[CC1Option]>,
@@ -911,6 +924,7 @@ def gno_strict_dwarf : Flag<["-"], "gno-strict-dwarf">, Group<g_flags_Group>;
 def gcolumn_info : Flag<["-"], "gcolumn-info">, Group<g_flags_Group>;
 def gsplit_dwarf : Flag<["-"], "gsplit-dwarf">, Group<g_flags_Group>;
 def ggnu_pubnames : Flag<["-"], "ggnu-pubnames">, Group<g_flags_Group>;
+def gdwarf_aranges : Flag<["-"], "gdwarf-aranges">, Group<g_flags_Group>;
 def headerpad__max__install__names : Joined<["-"], "headerpad_max_install_names">;
 def help : Flag<["-", "--"], "help">, Flags<[CC1Option]>,
   HelpText<"Display available options">;

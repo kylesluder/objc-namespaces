@@ -222,7 +222,10 @@ def note_function_suggestion : Note<"did you mean %0?">;
 def err_ellipsis_first_arg : Error<
   "ISO C requires a named argument before '...'">;
 def err_declarator_need_ident : Error<"declarator requires an identifier">;
-def err_bad_language : Error<"unknown linkage language">;
+def err_language_linkage_spec_unknown : Error<"unknown linkage language">;
+def err_language_linkage_spec_not_ascii : Error<
+  "string literal in language linkage specifier cannot have an "
+  "encoding-prefix">;
 def warn_use_out_of_scope_declaration : Warning<
   "use of out-of-scope declaration of %0">;
 def err_inline_non_function : Error<
@@ -469,22 +472,28 @@ def err_opencl_half_return : Error<
   "declaring function return value of type %0 is not allowed; did you forget * ?">;
 def warn_enum_value_overflow : Warning<"overflow in enumeration value">;
 def warn_pragma_options_align_reset_failed : Warning<
-  "#pragma options align=reset failed: %0">;
+  "#pragma options align=reset failed: %0">,
+  InGroup<IgnoredPragmas>;
 def err_pragma_options_align_mac68k_target_unsupported : Error<
   "mac68k alignment pragma is not supported on this target">;
 def warn_pragma_pack_invalid_alignment : Warning<
-  "expected #pragma pack parameter to be '1', '2', '4', '8', or '16'">;
+  "expected #pragma pack parameter to be '1', '2', '4', '8', or '16'">,
+  InGroup<IgnoredPragmas>;
 // Follow the MSVC implementation.
 def warn_pragma_pack_show : Warning<"value of #pragma pack(show) == %0">;
 def warn_pragma_pack_pop_identifer_and_alignment : Warning<
   "specifying both a name and alignment to 'pop' is undefined">;
-def warn_pragma_pack_pop_failed : Warning<"#pragma pack(pop, ...) failed: %0">;
-def warn_pragma_ms_struct_failed : Warning<"#pramga ms_struct can not be used with dynamic classes or structures">, InGroup<IgnoredAttributes>;
+def warn_pragma_pop_failed : Warning<"#pragma %0(pop, ...) failed: %1">,
+  InGroup<IgnoredPragmas>;
+def warn_pragma_ms_struct_failed : Warning<"#pramga ms_struct can not be used with dynamic classes or structures">,
+  InGroup<IgnoredPragmas>;
 
 def warn_pragma_unused_undeclared_var : Warning<
-  "undeclared variable %0 used as an argument for '#pragma unused'">;
+  "undeclared variable %0 used as an argument for '#pragma unused'">,
+  InGroup<IgnoredPragmas>;
 def warn_pragma_unused_expected_var_arg : Warning<
-  "only variables can be arguments to '#pragma unused'">;
+  "only variables can be arguments to '#pragma unused'">,
+  InGroup<IgnoredPragmas>;
 def err_pragma_push_visibility_mismatch : Error<
   "#pragma visibility push with no matching #pragma visibility pop">;
 def note_surrounding_namespace_ends_here : Note<
@@ -1521,7 +1530,10 @@ def err_auto_var_init_multiple_expressions : Error<
 def err_auto_new_ctor_multiple_expressions : Error<
   "new expression for type %0 contains multiple constructor arguments">;
 def err_auto_missing_trailing_return : Error<
-  "'auto' return without trailing return type">;
+  "'auto' return without trailing return type; deduced return types are a "
+  "C++1y extension">;
+def err_deduced_return_type : Error<
+  "deduced return types are a C++1y extension">;
 def err_trailing_return_without_auto : Error<
   "function with trailing return type must specify return type 'auto', not %0">;
 def err_trailing_return_in_parens : Error<
@@ -1976,8 +1988,8 @@ def error_cannot_find_suitable_accessor : Error<
 
 def err_attribute_aligned_not_power_of_two : Error<
   "requested alignment is not a power of 2">;
-def err_attribute_aligned_greater_than_8192 : Error<
-  "requested alignment must be 8192 bytes or smaller">;
+def err_attribute_aligned_too_great : Error<
+  "requested alignment must be %0 bytes or smaller">;
 def warn_redeclaration_without_attribute_prev_attribute_ignored : Warning<
   "%0 redeclared without %1 attribute: previous %1 ignored">;
 def warn_attribute_ignored : Warning<"%0 attribute ignored">,
@@ -3207,8 +3219,6 @@ def note_dependent_non_type_default_arg_in_partial_spec : Note<
 def err_dependent_typed_non_type_arg_in_partial_spec : Error<
     "non-type template argument specializes a template parameter with "
     "dependent type %0">;
-def note_dependent_typed_non_type_default_arg_in_partial_spec : Note<
-    "template parameter is declared here">;
 def err_partial_spec_args_match_primary_template : Error<
     "%select{class|variable}0 template partial specialization does not "
     "specialize any template argument; to %select{declare|define}1 the "

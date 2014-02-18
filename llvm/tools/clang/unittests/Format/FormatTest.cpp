@@ -603,6 +603,9 @@ TEST_F(FormatTest, UnderstandsSingleLineComments) {
   verifyFormat("SomeObject\n"
                "    // Calling someFunction on SomeObject\n"
                "    .someFunction();");
+  verifyFormat("auto result = SomeObject\n"
+               "                  // Calling someFunction on SomeObject\n"
+               "                  .someFunction();");
   verifyFormat("void f(int i,  // some comment (probably for i)\n"
                "       int j,  // some comment (probably for j)\n"
                "       int k); // some comment (probably for k)");
@@ -1622,6 +1625,9 @@ TEST_F(FormatTest, FormatsClasses) {
   verifyFormat("struct aaaaaaaaaaaaaaaaaaaa\n"
                "    : public aaaaaaaaaaaaaaaaaaa<aaaaaaaaaaaaaaaaaaaaa,\n"
                "                                 aaaaaaaaaaaaaaaaaaaaaa> {};");
+  verifyFormat("template <class R, class C>\n"
+               "struct Aaaaaaaaaaaaaaaaa<R (C::*)(int) const>\n"
+               "    : Aaaaaaaaaaaaaaaaa<R (C::*)(int)> {};");
 }
 
 TEST_F(FormatTest, FormatsVariableDeclarationsAfterStructOrClass) {
@@ -3135,13 +3141,24 @@ TEST_F(FormatTest, BreaksFunctionDeclarationsWithTrailingTokens) {
       "virtual void aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()\n"
       "    const override;");
 
-  // Unless this would lead to the first parameter being broken.
-  verifyFormat("void someLongFunction(int someLongParameter)\n"
-               "    const {}",
+  // Even if the first parameter has to be wrapped.
+  verifyFormat("void someLongFunction(\n"
+               "    int someLongParameter) const {}",
                getLLVMStyleWithColumns(46));
-  verifyFormat("void someLongFunction(int someLongParameter)\n"
-               "    const {}",
+  verifyFormat("void someLongFunction(\n"
+               "    int someLongParameter) const {}",
                Style);
+  verifyFormat("void someLongFunction(\n"
+               "    int someLongParameter) override {}",
+               Style);
+  verifyFormat("void someLongFunction(\n"
+               "    int someLongParameter) final {}",
+               Style);
+  verifyFormat("void someLongFunction(\n"
+               "    int parameter) const override {}",
+               Style);
+
+  // Unless these are unknown annotations.
   verifyFormat("void SomeFunction(aaaaaaaaaa aaaaaaaaaaaaaaa,\n"
                "                  aaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
                "    LONG_AND_UGLY_ANNOTATION;");
@@ -7953,6 +7970,7 @@ TEST_F(FormatTest, FormatsLambdas) {
   // Lambdas with return types.
   verifyFormat("int c = []()->int { return 2; }();\n");
   verifyFormat("int c = []()->vector<int> { return { 2 }; }();\n");
+  verifyFormat("Foo([]()->std::vector<int> { return { 2 }; }());");
 
   // Not lambdas.
   verifyFormat("constexpr char hello[]{ \"hello\" };");

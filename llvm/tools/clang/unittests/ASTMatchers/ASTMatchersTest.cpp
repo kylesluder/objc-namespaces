@@ -12,6 +12,8 @@
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Tooling/Tooling.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/Support/Host.h"
 #include "gtest/gtest.h"
 
 namespace clang {
@@ -103,12 +105,12 @@ TEST(NameableDeclaration, REMatchesVariousDecls) {
 
 TEST(DeclarationMatcher, MatchClass) {
   DeclarationMatcher ClassMatcher(recordDecl());
-#if !defined(_MSC_VER)
-  EXPECT_FALSE(matches("", ClassMatcher));
-#else
-  // Matches class type_info.
-  EXPECT_TRUE(matches("", ClassMatcher));
-#endif
+  if (llvm::Triple(llvm::sys::getDefaultTargetTriple()).getOS() !=
+      llvm::Triple::Win32)
+    EXPECT_FALSE(matches("", ClassMatcher));
+  else
+    // Matches class type_info.
+    EXPECT_TRUE(matches("", ClassMatcher));
 
   DeclarationMatcher ClassX = recordDecl(recordDecl(hasName("X")));
   EXPECT_TRUE(matches("class X;", ClassX));
@@ -1038,7 +1040,7 @@ TEST(HasType, MatchesAsString) {
   EXPECT_TRUE(matches("namespace ns { struct A {}; }  struct B { ns::A a; };",
       fieldDecl(hasType(asString("ns::A")))));
   EXPECT_TRUE(matches("namespace { struct A {}; }  struct B { A a; };",
-      fieldDecl(hasType(asString("struct <anonymous>::A")))));
+      fieldDecl(hasType(asString("struct <anonymous namespace>::A")))));
 }
 
 TEST(Matcher, OverloadedOperatorCall) {
@@ -1300,15 +1302,16 @@ TEST(Function, MatchesFunctionDeclarations) {
   EXPECT_TRUE(matches("void f() { f(); }", CallFunctionF));
   EXPECT_TRUE(notMatches("void f() { }", CallFunctionF));
 
-#if !defined(_MSC_VER)
-  // FIXME: Make this work for MSVC.
-  // Dependent contexts, but a non-dependent call.
-  EXPECT_TRUE(matches("void f(); template <int N> void g() { f(); }",
-                      CallFunctionF));
-  EXPECT_TRUE(
-      matches("void f(); template <int N> struct S { void g() { f(); } };",
-              CallFunctionF));
-#endif
+  if (llvm::Triple(llvm::sys::getDefaultTargetTriple()).getOS() !=
+      llvm::Triple::Win32) {
+    // FIXME: Make this work for MSVC.
+    // Dependent contexts, but a non-dependent call.
+    EXPECT_TRUE(matches("void f(); template <int N> void g() { f(); }",
+                        CallFunctionF));
+    EXPECT_TRUE(
+        matches("void f(); template <int N> struct S { void g() { f(); } };",
+                CallFunctionF));
+  }
 
   // Depedent calls don't match.
   EXPECT_TRUE(

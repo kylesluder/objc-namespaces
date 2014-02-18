@@ -262,6 +262,32 @@ public:
 
   bool MSStructPragmaOn; // True when \#pragma ms_struct on
 
+  /// \brief Controls member pointer representation format under the MS ABI.
+  LangOptions::PragmaMSPointersToMembersKind
+      MSPointerToMemberRepresentationMethod;
+
+  enum PragmaVtorDispKind {
+    PVDK_Push,          ///< #pragma vtordisp(push, mode)
+    PVDK_Set,           ///< #pragma vtordisp(mode)
+    PVDK_Pop,           ///< #pragma vtordisp(pop)
+    PVDK_Reset          ///< #pragma vtordisp()
+  };
+
+  /// \brief Whether to insert vtordisps prior to virtual bases in the Microsoft
+  /// C++ ABI.  Possible values are 0, 1, and 2, which mean:
+  ///
+  /// 0: Suppress all vtordisps
+  /// 1: Insert vtordisps in the presence of vbase overrides and non-trivial
+  ///    structors
+  /// 2: Always insert vtordisps to support RTTI on partially constructed
+  ///    objects
+  ///
+  /// The stack always has at least one element in it.
+  SmallVector<MSVtorDispAttr::Mode, 2> VtorDispModeStack;
+
+  /// \brief Source location for newly created implicit MSInheritanceAttrs
+  SourceLocation ImplicitMSInheritanceAttrLoc;
+
   /// VisContext - Manages the stack for \#pragma GCC visibility.
   void *VisContext; // Really a "PragmaVisStack*"
 
@@ -1328,7 +1354,8 @@ public:
                                SourceLocation IILoc,
                                Scope *S,
                                CXXScopeSpec *SS,
-                               ParsedType &SuggestedType);
+                               ParsedType &SuggestedType,
+                               bool AllowClassTemplates = false);
 
   /// \brief Describes the result of the name lookup and resolution performed
   /// by \c ClassifyName().
@@ -1868,7 +1895,7 @@ public:
   DLLExportAttr *mergeDLLExportAttr(Decl *D, SourceRange Range,
                                     unsigned AttrSpellingListIndex);
   MSInheritanceAttr *
-  mergeMSInheritanceAttr(Decl *D, SourceRange Range,
+  mergeMSInheritanceAttr(Decl *D, SourceRange Range, bool BestCase,
                          unsigned AttrSpellingListIndex,
                          MSInheritanceAttr::Spelling SemanticSpelling);
   FormatAttr *mergeFormatAttr(Decl *D, SourceRange Range,
@@ -2581,7 +2608,7 @@ public:
                                       unsigned ArgNum, StringRef &Str,
                                       SourceLocation *ArgLocation = 0);
   bool checkMSInheritanceAttrOnDefinition(
-      CXXRecordDecl *RD, SourceRange Range,
+      CXXRecordDecl *RD, SourceRange Range, bool BestCase,
       MSInheritanceAttr::Spelling SemanticSpelling);
 
   void CheckAlignasUnderalignment(Decl *D);
@@ -4638,8 +4665,7 @@ public:
   //
   Decl *ActOnStartLinkageSpecification(Scope *S,
                                        SourceLocation ExternLoc,
-                                       SourceLocation LangLoc,
-                                       StringRef Lang,
+                                       Expr *LangStr,
                                        SourceLocation LBraceLoc);
   Decl *ActOnFinishLinkageSpecification(Scope *S,
                                         Decl *LinkageSpec,
@@ -6977,6 +7003,17 @@ public:
   /// \#pragma comment(kind, "arg").
   void ActOnPragmaMSComment(PragmaMSCommentKind Kind, StringRef Arg);
 
+  /// ActOnPragmaMSPointersToMembers - called on well formed \#pragma
+  /// pointers_to_members(representation method[, general purpose
+  /// representation]).
+  void ActOnPragmaMSPointersToMembers(
+      LangOptions::PragmaMSPointersToMembersKind Kind,
+      SourceLocation PragmaLoc);
+
+  /// \brief Called on well formed \#pragma vtordisp().
+  void ActOnPragmaMSVtorDisp(PragmaVtorDispKind Kind, SourceLocation PragmaLoc,
+                             MSVtorDispAttr::Mode Value);
+
   /// ActOnPragmaDetectMismatch - Call on well-formed \#pragma detect_mismatch
   void ActOnPragmaDetectMismatch(StringRef Name, StringRef Value);
 
@@ -7094,6 +7131,16 @@ public:
                                           Stmt *AStmt,
                                           SourceLocation StartLoc,
                                           SourceLocation EndLoc);
+
+  OMPClause *ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind,
+                                         Expr *Expr,
+                                         SourceLocation StartLoc,
+                                         SourceLocation LParenLoc,
+                                         SourceLocation EndLoc);
+  /// \brief Called on well-formed 'if' clause.
+  OMPClause *ActOnOpenMPIfClause(Expr *Condition, SourceLocation StartLoc,
+                                 SourceLocation LParenLoc,
+                                 SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPSimpleClause(OpenMPClauseKind Kind,
                                      unsigned Argument,

@@ -1600,8 +1600,6 @@ public:
 
   /// \brief Returns the inheritance model used for this record.
   MSInheritanceAttr::Spelling getMSInheritanceModel() const;
-  /// \brief Locks-in the inheritance model for this class.
-  void setMSInheritanceModel();
   /// \brief Calculate what the inheritance model would be for this class.
   MSInheritanceAttr::Spelling calculateInheritanceModel() const;
 
@@ -1616,6 +1614,10 @@ public:
                                                getMSInheritanceModel()) ||
            (hasDefinition() && isPolymorphic());
   }
+
+  /// \brief Controls when vtordisps will be emitted if this record is used as a
+  /// virtual base.
+  MSVtorDispAttr::Mode getMSVtorDispMode() const;
 
   /// \brief Determine whether this lambda expression was known to be dependent
   /// at the time it was created, even if its context does not appear to be
