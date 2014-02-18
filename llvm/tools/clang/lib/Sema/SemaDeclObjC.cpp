@@ -2531,8 +2531,6 @@ Sema::ObjCContainerKind Sema::getObjCContainerKind() const {
       return Sema::OCK_Implementation;
     case Decl::ObjCCategoryImpl:
       return Sema::OCK_CategoryImplementation;
-    case Decl::ObjCNamespace:
-      return Sema::OCK_Namespace;
 
     default:
       return Sema::OCK_None;
@@ -2542,16 +2540,17 @@ Sema::ObjCContainerKind Sema::getObjCContainerKind() const {
 // Note: For class/category implementations, allMethods is always null.
 Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
                        ArrayRef<DeclGroupPtrTy> allTUVars) {
+  if (isa<ObjCNamespaceDecl>(CurContext)) {
+    assert(getObjCContainerKind() == Sema::OCK_None
+      && "Somehow we think that @namespace is a method container");
+    PopDeclContext();
+    return 0;
+  }
+
   if (getObjCContainerKind() == Sema::OCK_None)
     return 0;
 
   assert(AtEnd.isValid() && "Invalid location for '@end'");
-
-  if (getObjCContainerKind() == Sema::OCK_Namespace) {
-    ObjCNamespaceDecl *NSDecl = cast<ObjCNamespaceDecl>(CurContext);
-    PopDeclContext();
-    return 0;
-  }
 
   ObjCContainerDecl *OCD = dyn_cast<ObjCContainerDecl>(CurContext);
   Decl *ClassDecl = cast<Decl>(OCD);

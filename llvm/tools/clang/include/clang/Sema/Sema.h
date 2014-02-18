@@ -6612,8 +6612,7 @@ public:
     OCK_Category,
     OCK_ClassExtension,
     OCK_Implementation,
-    OCK_CategoryImplementation,
-    OCK_Namespace
+    OCK_CategoryImplementation
   };
   ObjCContainerKind getObjCContainerKind() const;
 
