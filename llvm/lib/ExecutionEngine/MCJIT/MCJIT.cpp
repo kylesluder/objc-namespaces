@@ -142,7 +142,8 @@ ObjectBufferStream* MCJIT::emitObject(Module *M) {
 
   PassManager PM;
 
-  PM.add(new DataLayout(*TM->getDataLayout()));
+  M->setDataLayout(TM->getDataLayout());
+  PM.add(new DataLayoutPass(M));
 
   // The RuntimeDyld will take ownership of this shortly
   OwningPtr<ObjectBufferStream> CompiledObject(new ObjectBufferStream());
@@ -372,7 +373,7 @@ void *MCJIT::getPointerToFunction(Function *F) {
   // load address of the symbol, not the local address.
   Mangler Mang(TM->getDataLayout());
   SmallString<128> Name;
-  TM->getTargetLowering()->getNameWithPrefix(Name, F, Mang);
+  TM->getNameWithPrefix(Name, F, Mang);
   return (void*)Dyld.getSymbolLoadAddress(Name);
 }
 

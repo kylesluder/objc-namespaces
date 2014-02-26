@@ -199,7 +199,7 @@ class ARMAsmParser : public MCTargetAsmParser {
   bool parsePrefix(ARMMCExpr::VariantKind &RefKind);
   bool parseMemRegOffsetShift(ARM_AM::ShiftOpc &ShiftType,
                               unsigned &ShiftAmount);
-  bool parseDirectiveWord(unsigned Size, SMLoc L);
+  bool parseLiteralValues(unsigned Size, SMLoc L);
   bool parseDirectiveThumb(SMLoc L);
   bool parseDirectiveARM(SMLoc L);
   bool parseDirectiveThumbFunc(SMLoc L);
@@ -228,6 +228,7 @@ class ARMAsmParser : public MCTargetAsmParser {
   bool parseDirectiveMovSP(SMLoc L);
   bool parseDirectiveObjectArch(SMLoc L);
   bool parseDirectiveArchExtension(SMLoc L);
+  bool parseDirectiveAlign(SMLoc L);
 
   StringRef splitMnemonic(StringRef Mnemonic, unsigned &PredicationCode,
                           bool &CarrySetting, unsigned &ProcessorIMod,
@@ -320,7 +321,7 @@ class ARMAsmParser : public MCTargetAsmParser {
                         const SmallVectorImpl<MCParsedAsmOperand*> &);
   void cvtThumbBranches(MCInst &Inst,
                         const SmallVectorImpl<MCParsedAsmOperand*> &);
-                        
+
   bool validateInstruction(MCInst &Inst,
                            const SmallVectorImpl<MCParsedAsmOperand*> &Ops);
   bool processInstruction(MCInst &Inst,
@@ -3597,7 +3598,7 @@ parseMemBarrierOptOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
       Error(Loc, "illegal expression");
       return MatchOperand_ParseFail;
     }
-    
+
     const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(MemBarrierID);
     if (!CE) {
       Error(Loc, "constant expression expected");
@@ -4196,7 +4197,7 @@ parseAM3Offset(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
     isAdd = false;
     haveEaten = true;
   }
-  
+
   Tok = Parser.getTok();
   int Reg = tryParseRegister();
   if (Reg == -1) {
@@ -4269,7 +4270,7 @@ cvtThumbBranches(MCInst &Inst,
         break;
     }
   }
-  
+
   // now decide on encoding size based on branch target range
   switch(Inst.getOpcode()) {
     // classify tB as either t2B or t1B based on range of immediate operand
@@ -7849,6 +7850,10 @@ unsigned ARMAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
   return Match_Success;
 }
 
+template<> inline bool IsCPSRDead<MCInst>(MCInst* Instr) {
+  return true; // In an assembly source, no need to second-guess
+}
+
 static const char *getSubtargetFeatureName(unsigned Val);
 bool ARMAsmParser::
 MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
@@ -7959,7 +7964,9 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 bool ARMAsmParser::ParseDirective(AsmToken DirectiveID) {
   StringRef IDVal = DirectiveID.getIdentifier();
   if (IDVal == ".word")
-    return parseDirectiveWord(4, DirectiveID.getLoc());
+    return parseLiteralValues(4, DirectiveID.getLoc());
+  else if (IDVal == ".short" || IDVal == ".hword")
+    return parseLiteralValues(2, DirectiveID.getLoc());
   else if (IDVal == ".thumb")
     return parseDirectiveThumb(DirectiveID.getLoc());
   else if (IDVal == ".arm")
@@ -8020,12 +8027,16 @@ bool ARMAsmParser::ParseDirective(AsmToken DirectiveID) {
     return parseDirectiveObjectArch(DirectiveID.getLoc());
   else if (IDVal == ".arch_extension")
     return parseDirectiveArchExtension(DirectiveID.getLoc());
+  else if (IDVal == ".align")
+    return parseDirectiveAlign(DirectiveID.getLoc());
   return true;
 }
 
-/// parseDirectiveWord
-///  ::= .word [ expression (, expression)* ]
-bool ARMAsmParser::parseDirectiveWord(unsigned Size, SMLoc L) {
+/// parseLiteralValues
+///  ::= .hword expression [, expression]*
+///  ::= .short expression [, expression]*
+///  ::= .word expression [, expression]*
+bool ARMAsmParser::parseLiteralValues(unsigned Size, SMLoc L) {
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
     for (;;) {
       const MCExpr *Value;
@@ -9057,6 +9068,23 @@ bool ARMAsmParser::parseDirectiveObjectArch(SMLoc L) {
   return false;
 }
 
+/// parseDirectiveAlign
+///   ::= .align
+bool ARMAsmParser::parseDirectiveAlign(SMLoc L) {
+  // NOTE: if this is not the end of the statement, fall back to the target
+  // agnostic handling for this directive which will correctly handle this.
+  if (getLexer().isNot(AsmToken::EndOfStatement))
+    return true;
+
+  // '.align' is target specifically handled to mean 2**2 byte alignment.
+  if (getStreamer().getCurrentSection().first->UseCodeAlign())
+    getStreamer().EmitCodeAlignment(4, 0);
+  else
+    getStreamer().EmitValueToAlignment(4, 0, 1, 0);
+
+  return false;
+}
+
 /// Force static initialization.
 extern "C" void LLVMInitializeARMAsmParser() {
   RegisterMCAsmParser<ARMAsmParser> X(TheARMTarget);
@@ -9097,9 +9125,6 @@ static const struct ExtMapEntry {
   { "xscale", Feature_None, 0 },
 };
 
-template <typename T, size_t N>
-size_t countof(const T (&)[N]) { return N; }
-
 /// parseDirectiveArchExtension
 ///   ::= .arch_extension [no]feature
 bool ARMAsmParser::parseDirectiveArchExtension(SMLoc L) {
@@ -9114,12 +9139,12 @@ bool ARMAsmParser::parseDirectiveArchExtension(SMLoc L) {
   getLexer().Lex();
 
   bool EnableFeature = true;
-  if (!Extension.lower().compare(0, 2, "no")) {
+  if (Extension.startswith_lower("no")) {
     EnableFeature = false;
     Extension = Extension.substr(2);
   }
 
-  for (unsigned EI = 0, EE = countof(Extensions); EI != EE; ++EI) {
+  for (unsigned EI = 0, EE = array_lengthof(Extensions); EI != EE; ++EI) {
     if (Extensions[EI].Extension != Extension)
       continue;
 

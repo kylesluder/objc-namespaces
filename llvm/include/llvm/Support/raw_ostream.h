@@ -346,8 +346,8 @@ public:
   /// itself to own the file descriptor. In particular, it will close the
   /// file descriptor when it is done (this is necessary to detect
   /// output errors).
-  raw_fd_ostream(const char *Filename, std::string &ErrorInfo,
-                 sys::fs::OpenFlags Flags = sys::fs::F_None);
+  raw_fd_ostream(StringRef Filename, std::string &ErrorInfo,
+                 sys::fs::OpenFlags Flags);
 
   /// raw_fd_ostream ctor - FD is the file descriptor that this writes to.  If
   /// ShouldClose is true, this closes the file when the stream is destroyed.

@@ -601,7 +601,7 @@ bool RAGreedy::shouldEvict(LiveInterval &A, bool IsHint,
 }
 
 /// canEvictInterference - Return true if all interferences between VirtReg and
-/// PhysReg can be evicted.  When OnlyCheap is set, don't do anything
+/// PhysReg can be evicted.
 ///
 /// @param VirtReg Live range that is about to be assigned.
 /// @param PhysReg Desired register for assignment.
@@ -1916,7 +1916,7 @@ RAGreedy::mayRecolorAllInterferences(unsigned PhysReg, LiveInterval &VirtReg,
 /// R3 is available.
 /// Recoloring => vC = R1, vA = R2, vB = R3
 ///
-/// \p Order defines the prefered allocation order for \p VirtReg.
+/// \p Order defines the preferred allocation order for \p VirtReg.
 /// \p NewRegs will contain any new virtual register that have been created
 /// (split, spill) during the process and that must be assigned.
 /// \p FixedRegisters contains all the virtual registers that cannot be

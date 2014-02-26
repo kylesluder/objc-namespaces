@@ -38,6 +38,7 @@
 #include "llvm/Support/Dwarf.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/LEB128.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Timer.h"
@@ -402,16 +403,7 @@ DIE *DwarfDebug::updateSubprogramScopeDIE(DwarfCompileUnit *SPCU,
         DIArray Args = SPTy.getTypeArray();
         uint16_t SPTag = SPTy.getTag();
         if (SPTag == dwarf::DW_TAG_subroutine_type)
-          for (unsigned i = 1, N = Args.getNumElements(); i < N; ++i) {
-            DIE *Arg =
-                SPCU->createAndAddDIE(dwarf::DW_TAG_formal_parameter, *SPDie);
-            DIType ATy(Args.getElement(i));
-            SPCU->addType(Arg, ATy);
-            if (ATy.isArtificial())
-              SPCU->addFlag(Arg, dwarf::DW_AT_artificial);
-            if (ATy.isObjectPointer())
-              SPCU->addDIEEntry(SPDie, dwarf::DW_AT_object_pointer, Arg);
-          }
+          SPCU->constructSubprogramArguments(*SPDie, Args);
         DIE *SPDeclDie = SPDie;
         SPDie = SPCU->createAndAddDIE(dwarf::DW_TAG_subprogram,
                                       *SPCU->getUnitDie());
@@ -581,7 +573,7 @@ DIE *DwarfDebug::createScopeChildrenDIE(DwarfCompileUnit *TheCU,
   DIE *ObjectPointer = NULL;
 
   // Collect arguments for current function.
-  if (LScopes.isCurrentFunctionScope(Scope))
+  if (LScopes.isCurrentFunctionScope(Scope)) {
     for (unsigned i = 0, N = CurrentFnArguments.size(); i < N; ++i)
       if (DbgVariable *ArgDV = CurrentFnArguments[i])
         if (DIE *Arg =
@@ -590,6 +582,16 @@ DIE *DwarfDebug::createScopeChildrenDIE(DwarfCompileUnit *TheCU,
           if (ArgDV->isObjectPointer())
             ObjectPointer = Arg;
         }
+
+    // If this is a variadic function, add an unspecified parameter.
+    DISubprogram SP(Scope->getScopeNode());
+    DIArray FnArgs = SP.getType().getTypeArray();
+    if (FnArgs.getElement(FnArgs.getNumElements() - 1)
+            .isUnspecifiedParameter()) {
+      DIE *Ellipsis = new DIE(dwarf::DW_TAG_unspecified_parameters);
+      Children.push_back(Ellipsis);
+    }
+  }
 
   // Collect lexical scope children first.
   const SmallVectorImpl<DbgVariable *> &Variables =
@@ -757,7 +759,6 @@ DwarfCompileUnit *DwarfDebug::constructDwarfCompileUnit(DICompileUnit DIUnit) {
   NewCU->addUInt(Die, dwarf::DW_AT_language, dwarf::DW_FORM_data2,
                  DIUnit.getLanguage());
   NewCU->addString(Die, dwarf::DW_AT_name, FN);
-
 
   if (!useSplitDwarf()) {
     NewCU->initStmtList(DwarfLineSectionSym);
@@ -1007,7 +1008,7 @@ void DwarfDebug::finalizeModuleInfo() {
         // This should be a unique identifier when we want to build .dwp files.
         uint64_t ID = 0;
         if (GenerateCUHash) {
-          DIEHash CUHash;
+          DIEHash CUHash(Asm);
           ID = CUHash.computeCUSignature(*TheU->getUnitDie());
         }
         TheU->addUInt(TheU->getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
@@ -1876,7 +1877,7 @@ unsigned DwarfFile::computeSizeAndOffset(DIE *Die, unsigned Offset) {
   Die->setOffset(Offset);
 
   // Start the size with the size of abbreviation code.
-  Offset += MCAsmInfo::getULEB128Size(Die->getAbbrevNumber());
+  Offset += getULEB128Size(Die->getAbbrevNumber());
 
   const SmallVectorImpl<DIEValue *> &Values = Die->getValues();
   const SmallVectorImpl<DIEAbbrevData> &AbbrevData = Abbrev.getData();
@@ -1940,10 +1941,8 @@ void DwarfDebug::emitSectionLabels() {
   if (useSplitDwarf())
     DwarfAbbrevDWOSectionSym = emitSectionSym(
         Asm, TLOF.getDwarfAbbrevDWOSection(), "section_abbrev_dwo");
-  emitSectionSym(Asm, TLOF.getDwarfARangesSection());
-
-  if (const MCSection *MacroInfo = TLOF.getDwarfMacroInfoSection())
-    emitSectionSym(Asm, MacroInfo);
+  if (GenerateARangeSection)
+    emitSectionSym(Asm, TLOF.getDwarfARangesSection());
 
   DwarfLineSectionSym =
       emitSectionSym(Asm, TLOF.getDwarfLineSection(), "section_line");

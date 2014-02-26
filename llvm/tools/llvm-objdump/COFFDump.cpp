@@ -233,6 +233,75 @@ static void printCOFFSymbolAddress(llvm::raw_ostream &Out,
     Out << format(" + 0x%04x", Disp);
 }
 
+static void
+printSEHTable(const COFFObjectFile *Obj, uint32_t TableVA, int Count) {
+  if (Count == 0)
+    return;
+
+  const pe32_header *PE32Header;
+  if (error(Obj->getPE32Header(PE32Header)))
+    return;
+  uint32_t ImageBase = PE32Header->ImageBase;
+  uintptr_t IntPtr = 0;
+  if (error(Obj->getVaPtr(TableVA, IntPtr)))
+    return;
+  const support::ulittle32_t *P = (const support::ulittle32_t *)IntPtr;
+  outs() << "SEH Table:";
+  for (int I = 0; I < Count; ++I)
+    outs() << format(" 0x%x", P[I] + ImageBase);
+  outs() << "\n\n";
+}
+
+static void printLoadConfiguration(const COFFObjectFile *Obj) {
+  // Skip if it's not executable.
+  const pe32_header *PE32Header;
+  if (error(Obj->getPE32Header(PE32Header)))
+    return;
+  if (!PE32Header)
+    return;
+
+  const coff_file_header *Header;
+  if (error(Obj->getCOFFHeader(Header)))
+    return;
+  // Currently only x86 is supported
+  if (Header->Machine != COFF::IMAGE_FILE_MACHINE_I386)
+    return;
+
+  const data_directory *DataDir;
+  if (error(Obj->getDataDirectory(COFF::LOAD_CONFIG_TABLE, DataDir)))
+    return;
+  uintptr_t IntPtr = 0;
+  if (DataDir->RelativeVirtualAddress == 0)
+    return;
+  if (error(Obj->getRvaPtr(DataDir->RelativeVirtualAddress, IntPtr)))
+    return;
+
+  const coff_load_configuration32 *LoadConf =
+      reinterpret_cast<const coff_load_configuration32 *>(IntPtr);
+
+  outs() << "Load configuration:"
+         << "\n  Timestamp: " << LoadConf->TimeDateStamp
+         << "\n  Major Version: " << LoadConf->MajorVersion
+         << "\n  Minor Version: " << LoadConf->MinorVersion
+         << "\n  GlobalFlags Clear: " << LoadConf->GlobalFlagsClear
+         << "\n  GlobalFlags Set: " << LoadConf->GlobalFlagsSet
+         << "\n  Critical Section Default Timeout: " << LoadConf->CriticalSectionDefaultTimeout
+         << "\n  Decommit Free Block Threshold: " << LoadConf->DeCommitFreeBlockThreshold
+         << "\n  Decommit Total Free Threshold: " << LoadConf->DeCommitTotalFreeThreshold
+         << "\n  Lock Prefix Table: " << LoadConf->LockPrefixTable
+         << "\n  Maximum Allocation Size: " << LoadConf->MaximumAllocationSize
+         << "\n  Virtual Memory Threshold: " << LoadConf->VirtualMemoryThreshold
+         << "\n  Process Affinity Mask: " << LoadConf->ProcessAffinityMask
+         << "\n  Process Heap Flags: " << LoadConf->ProcessHeapFlags
+         << "\n  CSD Version: " << LoadConf->CSDVersion
+         << "\n  Security Cookie: " << LoadConf->SecurityCookie
+         << "\n  SEH Table: " << LoadConf->SEHandlerTable
+         << "\n  SEH Count: " << LoadConf->SEHandlerCount
+         << "\n\n";
+  printSEHTable(Obj, LoadConf->SEHandlerTable, LoadConf->SEHandlerCount);
+  outs() << "\n";
+}
+
 // Prints import tables. The import table is a table containing the list of
 // DLL name and symbol names which will be linked by the loader.
 static void printImportTables(const COFFObjectFile *Obj) {
@@ -431,6 +500,7 @@ void llvm::printCOFFUnwindInfo(const COFFObjectFile *Obj) {
 
 void llvm::printCOFFFileHeader(const object::ObjectFile *Obj) {
   const COFFObjectFile *file = dyn_cast<const COFFObjectFile>(Obj);
+  printLoadConfiguration(file);
   printImportTables(file);
   printExportTable(file);
 }

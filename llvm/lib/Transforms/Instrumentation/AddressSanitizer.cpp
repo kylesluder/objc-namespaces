@@ -57,7 +57,7 @@ using namespace llvm;
 static const uint64_t kDefaultShadowScale = 3;
 static const uint64_t kDefaultShadowOffset32 = 1ULL << 29;
 static const uint64_t kDefaultShadowOffset64 = 1ULL << 44;
-static const uint64_t kDefaultShort64bitShadowOffset = 0x7FFF8000;  // < 2G.
+static const uint64_t kSmallX86_64ShadowOffset = 0x7FFF8000;  // < 2G.
 static const uint64_t kPPC64_ShadowOffset64 = 1ULL << 41;
 static const uint64_t kMIPS32_ShadowOffset32 = 0x0aaa8000;
 static const uint64_t kFreeBSD_ShadowOffset32 = 1ULL << 30;
@@ -82,8 +82,6 @@ static const char *const kAsanUnpoisonGlobalsName = "__asan_after_dynamic_init";
 static const char *const kAsanInitName = "__asan_init_v3";
 static const char *const kAsanCovName = "__sanitizer_cov";
 static const char *const kAsanHandleNoReturnName = "__asan_handle_no_return";
-static const char *const kAsanMappingOffsetName = "__asan_mapping_offset";
-static const char *const kAsanMappingScaleName = "__asan_mapping_scale";
 static const int         kMaxAsanStackMallocSizeClass = 10;
 static const char *const kAsanStackMallocNameTemplate = "__asan_stack_malloc_";
 static const char *const kAsanStackFreeNameTemplate = "__asan_stack_free_";
@@ -165,11 +163,6 @@ static cl::opt<bool> ClKeepUninstrumented("asan-keep-uninstrumented-functions",
 //    Shadow = (Mem >> scale) + (1 << offset_log)
 static cl::opt<int> ClMappingScale("asan-mapping-scale",
        cl::desc("scale of asan shadow mapping"), cl::Hidden, cl::init(0));
-static cl::opt<int> ClMappingOffsetLog("asan-mapping-offset-log",
-       cl::desc("offset of asan shadow mapping"), cl::Hidden, cl::init(-1));
-static cl::opt<bool> ClShort64BitOffset("asan-short-64bit-mapping-offset",
-       cl::desc("Use short immediate constant as the mapping offset for 64bit"),
-       cl::Hidden, cl::init(true));
 
 // Optimization flags. Not user visible, used mostly for testing
 // and benchmarking the tool.
@@ -241,8 +234,9 @@ struct ShadowMapping {
 static ShadowMapping getShadowMapping(const Module &M, int LongSize) {
   llvm::Triple TargetTriple(M.getTargetTriple());
   bool IsAndroid = TargetTriple.getEnvironment() == llvm::Triple::Android;
-  bool IsMacOSX = TargetTriple.getOS() == llvm::Triple::MacOSX;
+  // bool IsMacOSX = TargetTriple.getOS() == llvm::Triple::MacOSX;
   bool IsFreeBSD = TargetTriple.getOS() == llvm::Triple::FreeBSD;
+  bool IsLinux = TargetTriple.getOS() == llvm::Triple::Linux;
   bool IsPPC64 = TargetTriple.getArch() == llvm::Triple::ppc64 ||
                  TargetTriple.getArch() == llvm::Triple::ppc64le;
   bool IsX86_64 = TargetTriple.getArch() == llvm::Triple::x86_64;
@@ -251,30 +245,35 @@ static ShadowMapping getShadowMapping(const Module &M, int LongSize) {
 
   ShadowMapping Mapping;
 
-  // OR-ing shadow offset if more efficient (at least on x86),
-  // but on ppc64 we have to use add since the shadow offset is not necessary
-  // 1/8-th of the address space.
-  Mapping.OrShadowOffset = !IsPPC64 && !ClShort64BitOffset;
-
-  Mapping.Offset = IsAndroid ? 0 :
-      (LongSize == 32 ?
-        (IsMIPS32 ? kMIPS32_ShadowOffset32 :
-          (IsFreeBSD ? kFreeBSD_ShadowOffset32 : kDefaultShadowOffset32)) :
-       IsPPC64 ? kPPC64_ShadowOffset64 : kDefaultShadowOffset64);
-  if (!IsAndroid && ClShort64BitOffset && IsX86_64 && !IsMacOSX) {
-    assert(LongSize == 64);
-    Mapping.Offset = (IsFreeBSD ?
-                      kFreeBSD_ShadowOffset64 : kDefaultShort64bitShadowOffset);
-  }
-  if (!IsAndroid && ClMappingOffsetLog >= 0) {
-    // Zero offset log is the special case.
-    Mapping.Offset = (ClMappingOffsetLog == 0) ? 0 : 1ULL << ClMappingOffsetLog;
+  if (LongSize == 32) {
+    if (IsAndroid)
+      Mapping.Offset = 0;
+    else if (IsMIPS32)
+      Mapping.Offset = kMIPS32_ShadowOffset32;
+    else if (IsFreeBSD)
+      Mapping.Offset = kFreeBSD_ShadowOffset32;
+    else
+      Mapping.Offset = kDefaultShadowOffset32;
+  } else {  // LongSize == 64
+    if (IsPPC64)
+      Mapping.Offset = kPPC64_ShadowOffset64;
+    else if (IsFreeBSD)
+      Mapping.Offset = kFreeBSD_ShadowOffset64;
+    else if (IsLinux && IsX86_64)
+      Mapping.Offset = kSmallX86_64ShadowOffset;
+    else
+      Mapping.Offset = kDefaultShadowOffset64;
   }
 
   Mapping.Scale = kDefaultShadowScale;
   if (ClMappingScale) {
     Mapping.Scale = ClMappingScale;
   }
+
+  // OR-ing shadow offset if more efficient (at least on x86) if the offset
+  // is a power of two, but on ppc64 we have to use add since the shadow
+  // offset is not necessary 1/8-th of the address space.
+  Mapping.OrShadowOffset = !IsPPC64 && !(Mapping.Offset & (Mapping.Offset - 1));
 
   return Mapping;
 }
@@ -316,7 +315,6 @@ struct AddressSanitizer : public FunctionPass {
   Value *memToShadow(Value *Shadow, IRBuilder<> &IRB);
   bool runOnFunction(Function &F);
   bool maybeInsertAsanInitAtFunctionEntry(Function &F);
-  void emitShadowMapping(Module &M, IRBuilder<> &IRB) const;
   virtual bool doInitialization(Module &M);
   static char ID;  // Pass identification, replacement for typeid
 
@@ -336,7 +334,7 @@ struct AddressSanitizer : public FunctionPass {
   SmallString<64> BlacklistFile;
 
   LLVMContext *C;
-  DataLayout *TD;
+  const DataLayout *DL;
   int LongSize;
   Type *IntptrTy;
   ShadowMapping Mapping;
@@ -385,7 +383,7 @@ class AddressSanitizerModule : public ModulePass {
   SetOfDynamicallyInitializedGlobals DynamicallyInitializedGlobals;
   Type *IntptrTy;
   LLVMContext *C;
-  DataLayout *TD;
+  const DataLayout *DL;
   ShadowMapping Mapping;
   Function *AsanPoisonGlobals;
   Function *AsanUnpoisonGlobals;
@@ -516,7 +514,7 @@ struct FunctionStackPoisoner : public InstVisitor<FunctionStackPoisoner> {
 
   uint64_t getAllocaSizeInBytes(AllocaInst *AI) const {
     Type *Ty = AI->getAllocatedType();
-    uint64_t SizeInBytes = ASan.TD->getTypeAllocSize(Ty);
+    uint64_t SizeInBytes = ASan.DL->getTypeAllocSize(Ty);
     return SizeInBytes;
   }
   /// Finds alloca where the value comes from.
@@ -561,19 +559,13 @@ static size_t TypeSizeToSizeIndex(uint32_t TypeSize) {
 static GlobalVariable *createPrivateGlobalForString(
     Module &M, StringRef Str, bool AllowMerging) {
   Constant *StrConst = ConstantDataArray::getString(M.getContext(), Str);
-  // For module-local strings that can be merged with another one we set the
-  // private linkage and the unnamed_addr attribute.
-  // Non-mergeable strings are made linker_private to remove them from the
-  // symbol table. "private" linkage doesn't work for Darwin, where the
-  // "L"-prefixed globals  end up in __TEXT,__const section
-  // (see http://llvm.org/bugs/show_bug.cgi?id=17976 for more info).
-  GlobalValue::LinkageTypes linkage =
-      AllowMerging ? GlobalValue::PrivateLinkage
-                   : GlobalValue::LinkerPrivateLinkage;
+  // We use private linkage for module-local strings. If they can be merged
+  // with another one, we set the unnamed_addr attribute.
   GlobalVariable *GV =
       new GlobalVariable(M, StrConst->getType(), true,
-                         linkage, StrConst, kAsanGenPrefix);
-  if (AllowMerging) GV->setUnnamedAddr(true);
+                         GlobalValue::PrivateLinkage, StrConst, kAsanGenPrefix);
+  if (AllowMerging)
+    GV->setUnnamedAddr(true);
   GV->setAlignment(1);  // Strings may not be merged w/o setting align 1.
   return GV;
 }
@@ -697,7 +689,7 @@ void AddressSanitizer::instrumentMop(Instruction *I) {
   Type *OrigTy = cast<PointerType>(OrigPtrTy)->getElementType();
 
   assert(OrigTy->isSized());
-  uint32_t TypeSize = TD->getTypeStoreSizeInBits(OrigTy);
+  uint32_t TypeSize = DL->getTypeStoreSizeInBits(OrigTy);
 
   assert((TypeSize % 8) == 0);
 
@@ -918,13 +910,16 @@ void AddressSanitizerModule::initializeCallbacks(Module &M) {
 // redzones and inserts this function into llvm.global_ctors.
 bool AddressSanitizerModule::runOnModule(Module &M) {
   if (!ClGlobals) return false;
-  TD = getAnalysisIfAvailable<DataLayout>();
-  if (!TD)
+
+  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
+  if (!DLP)
     return false;
+  DL = &DLP->getDataLayout();
+
   BL.reset(SpecialCaseList::createOrDie(BlacklistFile));
   if (BL->isIn(M)) return false;
   C = &(M.getContext());
-  int LongSize = TD->getPointerSizeInBits();
+  int LongSize = DL->getPointerSizeInBits();
   IntptrTy = Type::getIntNTy(*C, LongSize);
   Mapping = getShadowMapping(M, LongSize);
   initializeCallbacks(M);
@@ -970,7 +965,7 @@ bool AddressSanitizerModule::runOnModule(Module &M) {
     GlobalVariable *G = GlobalsToChange[i];
     PointerType *PtrTy = cast<PointerType>(G->getType());
     Type *Ty = PtrTy->getElementType();
-    uint64_t SizeInBytes = TD->getTypeAllocSize(Ty);
+    uint64_t SizeInBytes = DL->getTypeAllocSize(Ty);
     uint64_t MinRZ = MinRedzoneSizeForGlobal();
     // MinRZ <= RZ <= kMaxGlobalRedzone
     // and trying to make RZ to be ~ 1/4 of SizeInBytes.
@@ -1091,35 +1086,19 @@ void AddressSanitizer::initializeCallbacks(Module &M) {
                             /*hasSideEffects=*/true);
 }
 
-void AddressSanitizer::emitShadowMapping(Module &M, IRBuilder<> &IRB) const {
-  // Tell the values of mapping offset and scale to the run-time.
-  GlobalValue *asan_mapping_offset =
-      new GlobalVariable(M, IntptrTy, true, GlobalValue::LinkOnceODRLinkage,
-                     ConstantInt::get(IntptrTy, Mapping.Offset),
-                     kAsanMappingOffsetName);
-  // Read the global, otherwise it may be optimized away.
-  IRB.CreateLoad(asan_mapping_offset, true);
-
-  GlobalValue *asan_mapping_scale =
-      new GlobalVariable(M, IntptrTy, true, GlobalValue::LinkOnceODRLinkage,
-                         ConstantInt::get(IntptrTy, Mapping.Scale),
-                         kAsanMappingScaleName);
-  // Read the global, otherwise it may be optimized away.
-  IRB.CreateLoad(asan_mapping_scale, true);
-}
-
 // virtual
 bool AddressSanitizer::doInitialization(Module &M) {
   // Initialize the private fields. No one has accessed them before.
-  TD = getAnalysisIfAvailable<DataLayout>();
-
-  if (!TD)
+  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
+  if (!DLP)
     return false;
+  DL = &DLP->getDataLayout();
+
   BL.reset(SpecialCaseList::createOrDie(BlacklistFile));
   DynamicallyInitializedGlobals.Init(M);
 
   C = &(M.getContext());
-  LongSize = TD->getPointerSizeInBits();
+  LongSize = DL->getPointerSizeInBits();
   IntptrTy = Type::getIntNTy(*C, LongSize);
 
   AsanCtorFunction = Function::Create(
@@ -1134,7 +1113,6 @@ bool AddressSanitizer::doInitialization(Module &M) {
   IRB.CreateCall(AsanInitFunction);
 
   Mapping = getShadowMapping(M, LongSize);
-  emitShadowMapping(M, IRB);
 
   appendToGlobalCtors(M, AsanCtorFunction, kAsanCtorAndCtorPriority);
   return true;
@@ -1384,7 +1362,7 @@ FunctionStackPoisoner::poisonRedZones(const ArrayRef<uint8_t> ShadowBytes,
     for (; i + LargeStoreSizeInBytes - 1 < n; i += LargeStoreSizeInBytes) {
       uint64_t Val = 0;
       for (size_t j = 0; j < LargeStoreSizeInBytes; j++) {
-        if (ASan.TD->isLittleEndian())
+        if (ASan.DL->isLittleEndian())
           Val |= (uint64_t)ShadowBytes[i + j] << (8 * j);
         else
           Val = (Val << 8) | ShadowBytes[i + j];

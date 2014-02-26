@@ -14,7 +14,7 @@
 //===----------------------------------------------------------------------===//
 
 #define DEBUG_TYPE "codegenprepare"
-#include "llvm/Transforms/Scalar.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -132,6 +132,7 @@ typedef DenseMap<Instruction *, Type *> InstrToOrigTy;
     bool MoveExtToFormExtLoad(Instruction *I);
     bool OptimizeExtUses(Instruction *I);
     bool OptimizeSelectInst(SelectInst *SI);
+    bool OptimizeShuffleVectorInst(ShuffleVectorInst *SI);
     bool DupRetToEnableTailCallOpts(BasicBlock *BB);
     bool PlaceDbgValues(Function &F);
   };
@@ -1755,7 +1756,12 @@ AddressingModeMatcher::IsPromotionProfitable(unsigned MatchedSize,
   Instruction *PromotedInst = dyn_cast<Instruction>(PromotedOperand);
   if (!PromotedInst)
     return false;
-  return TLI.isOperationLegalOrCustom(PromotedInst->getOpcode(),
+  int ISDOpcode = TLI.InstructionOpcodeToISD(PromotedInst->getOpcode());
+  // If the ISDOpcode is undefined, it was undefined before the promotion.
+  if (!ISDOpcode)
+    return true;
+  // Otherwise, check if the promoted instruction is legal or not.
+  return TLI.isOperationLegalOrCustom(ISDOpcode,
                                       EVT::getEVT(PromotedInst->getType()));
 }
 
@@ -2719,6 +2725,74 @@ bool CodeGenPrepare::OptimizeSelectInst(SelectInst *SI) {
   return true;
 }
 
+
+bool isBroadcastShuffle(ShuffleVectorInst *SVI) {
+  SmallVector<int, 16> Mask(SVI->getShuffleMask());
+  int SplatElem = -1;
+  for (unsigned i = 0; i < Mask.size(); ++i) {
+    if (SplatElem != -1 && Mask[i] != -1 && Mask[i] != SplatElem)
+      return false;
+    SplatElem = Mask[i];
+  }
+
+  return true;
+}
+
+/// Some targets have expensive vector shifts if the lanes aren't all the same
+/// (e.g. x86 only introduced "vpsllvd" and friends with AVX2). In these cases
+/// it's often worth sinking a shufflevector splat down to its use so that
+/// codegen can spot all lanes are identical.
+bool CodeGenPrepare::OptimizeShuffleVectorInst(ShuffleVectorInst *SVI) {
+  BasicBlock *DefBB = SVI->getParent();
+
+  // Only do this xform if variable vector shifts are particularly expensive.
+  if (!TLI || !TLI->isVectorShiftByScalarCheap(SVI->getType()))
+    return false;
+
+  // We only expect better codegen by sinking a shuffle if we can recognise a
+  // constant splat.
+  if (!isBroadcastShuffle(SVI))
+    return false;
+
+  // InsertedShuffles - Only insert a shuffle in each block once.
+  DenseMap<BasicBlock*, Instruction*> InsertedShuffles;
+
+  bool MadeChange = false;
+  for (Value::use_iterator UI = SVI->use_begin(), E = SVI->use_end();
+       UI != E; ++UI) {
+    Instruction *User = cast<Instruction>(*UI);
+
+    // Figure out which BB this ext is used in.
+    BasicBlock *UserBB = User->getParent();
+    if (UserBB == DefBB) continue;
+
+    // For now only apply this when the splat is used by a shift instruction.
+    if (!User->isShift()) continue;
+
+    // Everything checks out, sink the shuffle if the user's block doesn't
+    // already have a copy.
+    Instruction *&InsertedShuffle = InsertedShuffles[UserBB];
+
+    if (!InsertedShuffle) {
+      BasicBlock::iterator InsertPt = UserBB->getFirstInsertionPt();
+      InsertedShuffle = new ShuffleVectorInst(SVI->getOperand(0),
+                                              SVI->getOperand(1),
+                                              SVI->getOperand(2), "", InsertPt);
+    }
+
+    User->replaceUsesOfWith(SVI, InsertedShuffle);
+    MadeChange = true;
+  }
+
+  // If we removed all uses, nuke the shuffle.
+  if (SVI->use_empty()) {
+    SVI->eraseFromParent();
+    MadeChange = true;
+  }
+
+  return MadeChange;
+}
+
 bool CodeGenPrepare::OptimizeInst(Instruction *I) {
   if (PHINode *P = dyn_cast<PHINode>(I)) {
     // It is possible for very late stage optimizations (such as SimplifyCFG)
@@ -2790,6 +2864,9 @@ bool CodeGenPrepare::OptimizeInst(Instruction *I) {
 
   if (SelectInst *SI = dyn_cast<SelectInst>(I))
     return OptimizeSelectInst(SI);
+
+  if (ShuffleVectorInst *SVI = dyn_cast<ShuffleVectorInst>(I))
+    return OptimizeShuffleVectorInst(SVI);
 
   return false;
 }
