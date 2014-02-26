@@ -61,7 +61,13 @@ There exists one namespace named `default` namespace to which all classes, categ
 Qualified Identifiers
 =====
 
-A _qualified identifier_ names the namespace to which the object referred to by the identifier belongs. For example, `default.NSObject` is a qualified identifier that refers to the `NSObject` class (or protocol, depending on context) in the `default` namespace.
+A _qualified identifier_ is an identifier consisting of the name of an Objective-C symbol preceded by a namespace identifier and a backtick character ('`').
+
+    qual-id :: namespace-id '`' identifier-chars
+
+For example, `default``NSObject` is a qualified identifier that refers to the `NSObject` Objective-C symbol in the `default` namespace.
+
+**Rationale:** Backtick is the only special character on a US English keyboard which doesn't already have significance in C.
 
 
 Namespace Blocks
@@ -96,7 +102,7 @@ The `@using` directive can be used to create a new scope that contains either a 
     - (void)foo;
     {               // introduces a namespace scope (and a C scope)
       . . .
-      @using ns1.a; // introduces a namespace scope containing the identifier a from namespace ns1
+      @using ns1`a; // introduces a namespace scope containing the identifier a from namespace ns1
       . . .
       @using ns2;   // introduces a namespace scope containing all identifiers from namespace ns2
       . . .
@@ -178,30 +184,6 @@ A namespace of `nil` instructs the compiler not to encode a namespace in the sel
 As noted above, the compiler should warn if multiple methods in different namespaces with the same keywords are seen defined on the class of the receiver.
 
 
-`@class()` Expressions
-=====
-
-Because an arbitrary expression can be used as the receiver of an Objective-C message send, there is a potential ambiguity between a qualified class identifier `ns.SomeClass` and a member of an aggregate in local scope named `foo.SomeClass`.
-
-New syntax is introduced to alleviate this ambiguity as well as provide a desired feature. The `@class()` parameterized keyword can be used as the argument to a message send as well wherever an expression of type "pointer to class" can appear. The parameter to the keyword is a (qualified or unqualified) identifier naming a class; the keyword expression has the type of a pointer to the named class.
-
-With this feature, the ambiguity in message sends is resolved by always choosing variables ahead of namespaces if there is a conflict:
-
-    @class ns.SomeClass;
-    
-    void f() {
-      struct {
-        Class SomeClass;
-      } ns;
-      
-      [ns.SomeClass description]; // always refers to the member of struct ns
-      [[ns.SomeClass class] description]; // same - refers to member of struct 
-      [@class(ns.SomeClass) description]; // refers to class in namespace ns
-    }
-
-This is consistent with current behavior.
-
-
 Examples
 =====
 
@@ -209,17 +191,17 @@ The simplest way to adopt namespaces is to add explicit namespaces to identifier
 
 	// ExplicitNamespaces.h
 	#import <Foundation/NSObject.h>
-	@interface MyNS.MyClass : default.NSObject
+	@interface MyNS @@ MyClass : default @@ NSObject
 	- (void)publicMethod;
 	@end
 	
 	// ExplicitNamespaces.m
 	#import "ExplicitNamespaces.h"
-	@interface MyNS.MyClass (PrivateNS.PrivateMethods)
+	@interface MyNS`MyClass (PrivateNS`PrivateMethods)
 	- (void)privateMethod;
 	@end
 	
-	@implementation MyNS.MyClass
+	@implementation MyNS`MyClass
 	- (void)privateMethod;
 	{
 		// Compiler resolves this implementation to @selector(PrivateNS, privateMethod)
@@ -237,7 +219,7 @@ To avoid redundancy, you can use a `@namespace` block:
     #import <Foundation/NSObject.h>
     @namespace MyNS
     @interface MyClass : NSObject
-        // Compiler resolves NSObject to default.NSObject, because that is the closest declaration of NSObject that it sees
+        // Compiler resolves NSObject to default`NSObject, because that is the closest declaration of NSObject that it sees
     @end
     @end
 
@@ -263,11 +245,11 @@ A common but complicated scenario involves using protocols from other namespaces
     // MyClass.m
     #import "MyClass.h"
     
-    @interface MyNS.MyClass (PrivateNS.PrivateMethods) <MyFramework.FwkProto>
+    @interface MyNS`MyClass (PrivateNS`PrivateMethods) <MyFramework`FwkProto>
     - (void)privateHelperMethod;
     @end
     
-    @implementation MyNS.MyClass
+    @implementation MyNS`MyClass
     - (void)publicMethod;
     {
         // @selector(MyNS, publicMethod)
@@ -281,7 +263,7 @@ A common but complicated scenario involves using protocols from other namespaces
     }
     @end
     
-    @implementation MyNS.MyClass (PrivateNS.PrivateMethods)
+    @implementation MyNS`MyClass (PrivateNS`PrivateMethods)
     
     // Omit definition of optional -fwkMethod. If we included the definition here, the compiler would issue another warning that it could see two methods were defined on the same class with matching selectors in different namespaces.
     
