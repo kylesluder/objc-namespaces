@@ -37,7 +37,15 @@ Within a namespace, no two Objective-C symbols of the same kind may have the sam
 
 **Rationale:** Allowing namespaces and other kinds of identifiers to share names complicates parsing.
 
-A namespace is named by a string of valid C identifier characters optionally separated by periods. There is one flat collection of namespaces; namespaces can only contain Objective-C classes, categories, protocols, and selectors. No provision is made for mapping Objective-C namespaces to C++ namespaces, even when compiling Objective-C++ code.
+A namespace is named by a string of valid C identifier characters optionally separated by periods.
+
+    namespace-id :: identifier-chars [ '.' identifier-chars ]+
+
+There is one flat collection of namespaces.
+
+**Rationale**: 
+
+No provision is made for mapping Objective-C namespaces to C++ namespaces, even when compiling Objective-C++ code.
 
 **Rationale**: It's not the goal to make life hard for Objective-C++ developers, but it's likewise not the goal to make Objective-C developers deal with all the intricacies of C++ namespaces, or (potentially worse) just a subset of them.
 
