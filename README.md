@@ -23,7 +23,9 @@ Adding namespaces to the language will provide a well-known technique to natural
 Namespaces
 =====
 
-A namespace is a conceptual grouping of classes, categories, protocols, and selectors in which no two types of the same kind may have the same name. Two types of the same kind belonging to two different namespaces may have the same name. No two namespaces in an application may have the same name.
+A namespace is a conceptual grouping of classes, categories, protocols, and selectors in which no two identifiers of the same kind (barring those already allowed by the C language definition) may have the same name. Two identifiers of the same kind belonging to two different namespaces may have the same name. No two namespaces in an application may have the same name. (Because identifiers may themselves refer to namespaces, a namespace cannot have the same name as an identifier of another kind.)
+
+**Rationale:** Allowing namespaces and other kinds of identifiers to share names complicates parsing.
 
 A namespace is named by a string consisting of valid C identifier characters and periods. There is one flat collection of namespaces; namespaces can only contain Objective-C classes, categories, protocols, and selectors. No provision is made for mapping Objective-C namespaces to C++ namespaces, even when compiling Objective-C++ code.[^OBJCPP]
 
