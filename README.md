@@ -55,7 +55,7 @@ The Global Namespace
 
 There exists one namespace called the _global namespace_ to which all classes, categories, and protocols are assumed to belong unless otherwise specified. The contents of this namespace are visible from every scope. (See "Namespace Scopes and the `@using` Directive").
 
-**Rationale:** This namespace exists primarily to support interoperating with existing code that is not namespace-aware. In particular, to remain compatible with existing code, framework classes should remain in the default namespace while their private methods should be moved to categories in a private namespace.
+**Rationale:** This namespace exists primarily to support interoperating with existing code that is not namespace-aware. In particular, to remain compatible with existing code, framework classes should remain in the global namespace while their private methods should be moved to categories in a private namespace.
 
 
 Qualified Identifiers
@@ -192,7 +192,7 @@ When resolving a legacy selector to a method at runtime, the dispatch machinery 
 
    **Rationale:** It's possible to produce a binary that has multiple definitions of a method in the same namespace, but the loader will have chosen one winning method. This situation already exists independent of namespacing.
 
-2. Else, if _S_ does not have a namespace and a matching method is found on _C_ in the `default` namespace, that method is chosen. Only one such method can exist.
+2. Else, if _S_ does not have a namespace and a matching method is found on _C_ in the global namespace, that method is chosen. Only one such method can exist.
 
 3. Else, if _S_ does not have a namespace and a matching method is found on _C_ in any other namespace, one such method is chosen. Which one is chosen is undefined.
 
@@ -207,7 +207,7 @@ The simplest way to adopt namespaces is to add explicit namespaces to identifier
 
 	// ExplicitNamespaces.h
 	#import <Foundation/NSObject.h>
-	@interface MyNS @@ MyClass : default @@ NSObject
+	@interface MyNS`MyClass : `NSObject
 	- (void)publicMethod;
 	@end
 	
@@ -220,12 +220,12 @@ The simplest way to adopt namespaces is to add explicit namespaces to identifier
 	@implementation MyNS`MyClass
 	- (void)privateMethod;
 	{
-		// Compiler resolves this implementation to @selector(PrivateNS, privateMethod)
+		// Compiler resolves this implementation to @selector(PrivateNS`privateMethod)
 	}
 	
 	- (void)publicMethod;
 	{
-		// Compiler resolves this implementation to @selector(MyNS, publicMethod)
+		// Compiler resolves this implementation to @selector(MyNS`publicMethod)
 	}
 	@end
 
@@ -235,7 +235,7 @@ To avoid redundancy, you can use a `@namespace` block:
     #import <Foundation/NSObject.h>
     @namespace MyNS
     @interface MyClass : NSObject
-        // Compiler resolves NSObject to default`NSObject, because that is the closest declaration of NSObject that it sees
+        // Compiler resolves NSObject to `NSObject, because that is the closest declaration of NSObject that it sees
     @end
     @end
 
@@ -268,12 +268,12 @@ A common but complicated scenario involves using protocols from other namespaces
     @implementation MyNS`MyClass
     - (void)publicMethod;
     {
-        // @selector(MyNS, publicMethod)
+        // @selector(MyNS`publicMethod)
     }
     
     - (void)fwkMethod;
     {
-        // NOTE: This resolves to @selector(MyNS, fwkMethod) !!!
+        // NOTE: This resolves to @selector(MyNS`fwkMethod) !!!
         // Because the inheritance and conformance chain of _this @implementation_ does not include a class or protocol that declares a selector named fwkMethod, the compiler considers this to be a definition of an undeclared method.
         // But because the compiler can see a category on this class that conforms to a protocol that declares a selector with a matching signature (even though both the selector and the category are in namesapces different from this implementation), it SHOULD issue a warning about this confusing behavior.
     }
