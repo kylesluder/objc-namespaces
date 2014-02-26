@@ -50,10 +50,10 @@ No provision is made for mapping Objective-C namespaces to C++ namespaces, even 
 **Rationale**: It's not the goal to make life hard for Objective-C++ developers, but it's likewise not the goal to make Objective-C developers deal with all the intricacies of C++ namespaces, or (potentially worse) just a subset of them.
 
 
-The Default Namespace
+The Global Namespace
 =====
 
-There exists one namespace named `default` namespace to which all classes, categories, and protocols are assumed to belong unless otherwise specified. The contents of this namespace are visible from every scope. (See "Namespace Scopes and the `@using` Directive").
+There exists one namespace called the _global namespace_ to which all classes, categories, and protocols are assumed to belong unless otherwise specified. The contents of this namespace are visible from every scope. (See "Namespace Scopes and the `@using` Directive").
 
 **Rationale:** This namespace exists primarily to support interoperating with existing code that is not namespace-aware. In particular, to remain compatible with existing code, framework classes should remain in the default namespace while their private methods should be moved to categories in a private namespace.
 
@@ -65,9 +65,11 @@ A _qualified identifier_ is an identifier consisting of the name of an Objective
 
     qual-id :: namespace-id '`' identifier-chars
 
-For example, `default``NSObject` is a qualified identifier that refers to the `NSObject` Objective-C symbol in the `default` namespace.
+For example, `MyNamespace``MyClass` is a qualified identifier that refers to the `MyClass` Objective-C symbol in the `MyNamespace` namespace.
 
 **Rationale:** Backtick is the only special character on a US English keyboard which doesn't already have significance in C.
+
+An _unqualified identifier_ is any other kind of identifier. (See "Namespace Scopes and the `@using` Directive.)
 
 
 Namespace Blocks
@@ -91,7 +93,9 @@ Unqualified declarations, including forward declarations, declared within a name
 Namespace Scopes and the `@using` Directive
 =====
 
-At any given point in a translation unit there exists a stack of namespace scopes. A namespace scope consists of a set of identifiers and namespace aliases. Each C scope and Objective-C `@`-block creates a correspondingly-lived namespace scope. When the compiler encounters an unqualified identifier, it looks up the stack of namespace scopes to find a matching identifier of the appropriate type.
+At any given point in a translation unit there exists a stack of namespace scopes. A namespace scope consists of a set of identifiers and namespace aliases. Each C scope and Objective-C `@`-block creates a correspondingly-lived namespace scope. Each namespace scope is also a C identifier scope.
+
+When the compiler encounters an unqualified identifier, it looks up the stack of namespace scopes to find a matching identifier of an appropriate kind. It first tries to match any C symbols in the current scope. If a match is not found, the compiler then tries to match an Objective-C symbol of an appropriate kind. If none is found, the compiler emits an error.
 
 All identifiers in the namespace named by a `@namespace` block are a member of the namespace scope created by that block.
 
@@ -124,22 +128,37 @@ Within a scope containing a namespace alias, references to that namespace alias 
 A `@using` directive MAY NOT create an ambiguity in identifier resolution. A `@using` directive that would cause an unqualified identifier to refer to two different symbols is an error.
 
 
-Namespaced Selectors
+Qualified Selectors
 =====
 
-At the heart of this proposal is the redefinition of the selector (whose type is known as `SEL` in Objective-C code). The selector is currently defined as a set of keywords of the form `@selector(key1:key2)`. Under this proposal, selectors gain an _optional_ namespace. A new comparison between selectors is defined:
+Since all selectors belong to exactly one namespace, the _selector literal_ is extended to include an optional namespace qualifier:
 
-* Selectors with namespaces are considered equal if and only if their namespaces and keywords are equal.
-* Selectors without namespaces are considered equal if and only if their keywords are equal.
-* A selector with a namespace is considered "compatible with" a selector lacking a namespace if and only if their keywords are equal.
+    selector :: '@' 'selector' '(' [ [ namespace-id ] ? '`' ] ? [ keyword [ ':' ] ? ]+ ')'
 
-New syntax is defined to refer to namespaced selectors: `@selector(<ns>, <kw>)` refers to a selector in the namespace `<ns>` composed of keywords `<kw>`. To produce a selector in the default namespace, use the spelling `@selector(default, <kw>)`.
+This permits three kinds of selector literals:
 
-The existing `@selector(<kw>)` syntax looks up a selector based on the namespace scope resolution rules above. The compiler should warn if multiple matching selectors are found in the current stack of namespace scopes.
+* A selector literal of the form `@selector(MyNamespace``keyword1:keyword2:)`, which is a _qualified_ selector referring to the `keyword1:keyword2:` selector in the `MyNamespace` namespace
+
+* A selector literal of the form `@selector(``keyword1:keyword2:)`, which is a _qualified_ selector referring to the `keyword1:keyword2:` selector in the global namespace
+
+* A selector literal of the form `@selector(keyword1:keyword2:)`, which is an _unqualified_ selector. (See "Method Resolution".)
 
 Just as it is not an error to create a `@selector` expression that refers to a non-existent method, it is not an error to refer to a non-existent namespace in a namespaced `@selector` expression. The compiler can optionally be made to warn about such expressions; these warnings can be silenced by making a declaration of a category within the appropriate namespace visible to the `@selector` expression.
 
 **Rationale**: It is often useful for code to refer to private or otherwise invisible names. For example, debugging code might want to send a private message to an object, or replace a private method's implementation with one that logs. Requiring an artificial category declaration just to reference such symbols seems heavy-handed, though extending the approach of `-Wundeclared-selector` to namespaces offers flexibility to those who believe code quality is improved by requiring explicit redeclarations of the contents of private namespaces.
+
+Namespaced Messages
+=====
+
+When emitting a message send, the compiler encodes a selector with a namespace chosen based on the static type of the receiver and the current namespace scope. If the compiler finds a method whose keywords match those in the message send, it encodes that namespace in the selector, preferring namespaces closer in scope to the message send.
+
+**TODO:** What namespace is used if the receiver is of type `id`?
+
+The programmer can override the compiler's preferred namespace selection by prefixing the first keyword with a qualifier:
+
+    [<receiver> MyNamespace`arg1:... arg2:...];
+
+As noted above, the compiler should warn if multiple methods in different namespaces with the same keywords are seen defined on the class of the receiver.
 
 
 Namespaced Classes, Categories, and Protocols
@@ -156,10 +175,18 @@ When the compiler encounters a method definition, it looks at the declarations o
 Method definitions that do not have a corresponding declaration visible to the compiler at the point of definition belong to the namespace of their containing `@implementation` block.
 
 
-Method Resolution
+Compatibility with Legacy Code
 =====
 
-When resolving a selector to a method at runtime, the dispatch machinery follows a certain resolution order, where _S_ refers to the selector being dispatched and _C_ is the class for the receiver (or a metaclass if the receiver is a class).
+Legacy code that interfaces with namespace-aware code will emit selectors that do not belong to any namespace. Such selectors are called _legacy selectors_. To implement backwards-compatibility, a new comparison between selectors is defined:
+
+* Qualified selectors are considered equal if and only if their namespaces and keywords are equal.
+
+* Legacy selectors are considered equal if and only if their keywords are equal.
+
+* A qualified selector is considered "compatible with" a legacy selector if and only if their keywords are equal.
+
+When resolving a legacy selector to a method at runtime, the dispatch machinery follows a certain resolution order, where _S_ refers to the selector being dispatched and _C_ is the class for the receiver (or a metaclass if the receiver is a class).
 
 1. If a matching method is found on _C_ that belongs to the same namespace as _S_, that method is chosen. Only one such method can exist.
 
@@ -171,17 +198,6 @@ When resolving a selector to a method at runtime, the dispatch machinery follows
 
 3. Else, the resolution fails.
 
-When emitting a message send, the compiler encodes a selector with a namespace chosen based on the static type of the receiver and the current namespace scope. If the compiler finds a method whose keywords match those in the message send, it encodes that namespace in the selector, preferring namespaces closer in scope to the message send. If the receiver is of static type `id`, then no selector is encoded.
-
-The programmer can override the compiler's preferred namespace selection using the `@namespace()` keyword:
-
-    [<receiver> @namespace(<ns>) arg1:... arg2:...];
-
-A namespace of `nil` instructs the compiler not to encode a namespace in the selector for the message send. This is discouraged, but can be useful when code needs to call methods in a namespace it cannot see (for example, calling private API to work around a framework or operating system bug).
-
-**Rationale:** A better approach in this circumstance might be to forward-declare both the namespace and the method in question. This will permit the continued use of `-Wunknown-selector` warnings when using `@selector()` to catch typos in the namespace or keywords, or cases where ARC cannot determine the memory management behavior of the unknown selector.
-
-As noted above, the compiler should warn if multiple methods in different namespaces with the same keywords are seen defined on the class of the receiver.
 
 
 Examples
