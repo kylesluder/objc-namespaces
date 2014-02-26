@@ -20,6 +20,14 @@ A common technique to achieve requirement 2 is to prefix method names with an un
 Adding namespaces to the language will provide a well-known technique to naturally avoid this issue and make code more readable.
 
 
+Compile time and runtime phases
+=====
+
+Because namespaces exist to alleviate naming conflicts between classes that might exist in different linkage units (for example, between a framework and a main executable), and owing to Objective-C's dynamism, support for namespaces exists both in the compiler and the runtime.
+
+The compiler operates on Objective-C _programs_, which consist of source code assembled into a _translation unit_. The runtime operates within the context of an _executable_, which is formed of one or more _binaries_ produced by the compiler and linker.
+
+
 Namespaces
 =====
 
