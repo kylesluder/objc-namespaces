@@ -2624,6 +2624,9 @@ CXTranslationUnit clang_createTranslationUnit(CXIndex CIdx,
 enum CXErrorCode clang_createTranslationUnit2(CXIndex CIdx,
                                               const char *ast_filename,
                                               CXTranslationUnit *out_TU) {
+  if (out_TU)
+    *out_TU = NULL;
+
   if (!CIdx || !ast_filename || !out_TU)
     return CXError_InvalidArguments;
 

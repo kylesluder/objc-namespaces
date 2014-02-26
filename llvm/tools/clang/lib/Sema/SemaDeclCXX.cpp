@@ -4479,15 +4479,6 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
         }
       }
     }
-
-    if (Record->hasUserDeclaredDestructor()) {
-      // The Microsoft ABI requires that we perform the destructor body
-      // checks (i.e. operator delete() lookup) in any translataion unit, as
-      // any translation unit may need to emit a deleting destructor.
-      if (Context.getTargetInfo().getCXXABI().isMicrosoft() &&
-          !Record->getDestructor()->isDeleted())
-        CheckDestructor(Record->getDestructor());
-    }
   }
 
   // C++11 [dcl.constexpr]p8: A constexpr specifier for a non-static member
@@ -12345,6 +12336,18 @@ void Sema::MarkVTableUsed(SourceLocation Loc, CXXRecordDecl *Class,
       // Otherwise, we can early exit.
       return;
     }
+  } else {
+    // The Microsoft ABI requires that we perform the destructor body
+    // checks (i.e. operator delete() lookup) when the vtable is marked used, as
+    // the deleting destructor is emitted with the vtable, not with the
+    // destructor definition as in the Itanium ABI.
+    // If it has a definition, we do the check at that point instead.
+    if (Context.getTargetInfo().getCXXABI().isMicrosoft() &&
+        Class->hasUserDeclaredDestructor() &&
+        !Class->getDestructor()->isDefined() &&
+        !Class->getDestructor()->isDeleted()) {
+      CheckDestructor(Class->getDestructor());
+    }
   }
 
   // Local classes need to have their virtual members marked
@@ -12751,6 +12754,13 @@ bool Sema::checkThisInStaticMemberFunctionAttributes(CXXMethodDecl *Method) {
       Args = ArrayRef<Expr *>(LE->args_begin(), LE->args_size());
     else if (RequiresCapabilityAttr *RC
                = dyn_cast<RequiresCapabilityAttr>(*A))
+      Args = ArrayRef<Expr *>(RC->args_begin(), RC->args_size());
+    else if (AcquireCapabilityAttr *AC = dyn_cast<AcquireCapabilityAttr>(*A))
+      Args = ArrayRef<Expr *>(AC->args_begin(), AC->args_size());
+    else if (TryAcquireCapabilityAttr *AC
+             = dyn_cast<TryAcquireCapabilityAttr>(*A))
+             Args = ArrayRef<Expr *>(AC->args_begin(), AC->args_size());
+    else if (ReleaseCapabilityAttr *RC = dyn_cast<ReleaseCapabilityAttr>(*A))
       Args = ArrayRef<Expr *>(RC->args_begin(), RC->args_size());
 
     if (Arg && !Finder.TraverseStmt(Arg))

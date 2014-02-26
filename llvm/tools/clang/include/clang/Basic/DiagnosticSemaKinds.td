@@ -30,6 +30,21 @@ def warn_duplicate_enum_values : Warning<
   "been assigned">, InGroup<DiagGroup<"duplicate-enum">>, DefaultIgnore;
 def note_duplicate_element : Note<"element %0 also has value %1">;
 
+// Absolute value functions
+def warn_unsigned_abs : Warning<
+  "taking the absolute value of unsigned type %0 has no effect">,
+  InGroup<AbsoluteValue>;
+def note_remove_abs : Note<
+  "remove the call to %0 since unsigned values cannot be negative">;
+def warn_abs_too_small : Warning<
+  "absolute value function %0 given an argument of type %1 but has parameter "
+  "of type %2 which may cause truncation of value">, InGroup<AbsoluteValue>;
+def warn_wrong_absolute_value_type : Warning<
+  "using %select{integer|floating point|complex}1 absolute value function %0 "
+  "when argument is of %select{integer|floating point|complex}2 type">,
+  InGroup<AbsoluteValue>;
+def note_replace_abs_function : Note<"use function '%0' instead">;
+
 def warn_infinite_recursive_function : Warning<
   "all paths through this function will call itself">,
   InGroup<InfiniteRecursion>, DefaultIgnore;
@@ -2307,12 +2322,19 @@ def warn_impcast_null_pointer_to_integer : Warning<
 def warn_impcast_floating_point_to_bool : Warning<
     "implicit conversion turns floating-point number into bool: %0 to %1">,
     InGroup<ImplicitConversionFloatingPointToBool>;
-def warn_impcast_function_to_bool : Warning<
-    "address of function %q0 will always evaluate to 'true'">,
+
+def warn_impcast_pointer_to_bool : Warning<
+    "address of%select{| function| array}0 '%1' will always evaluate to "
+    "'true'">,
     InGroup<BoolConversion>;
-def note_function_to_bool_silence : Note<
+def warn_null_pointer_compare : Warning<
+    "comparison of %select{address of|function|array}0 '%1' %select{not |}2"
+    "equal to a null pointer is always %select{true|false}2">,
+    InGroup<TautologicalPointerCompare>;
+
+def note_function_warning_silence : Note<
     "prefix with the address-of operator to silence this warning">;
-def note_function_to_bool_call : Note<
+def note_function_to_function_call : Note<
     "suffix with parentheses to turn this into a function call">;
 def warn_impcast_objective_c_literal_to_bool : Warning<
     "implicit boolean conversion of Objective-C object literal always "
@@ -2499,7 +2521,10 @@ def err_objc_bridged_related_invalid_class_name : Error<
 def err_objc_bridged_related_known_method : Error<
  "%0 must be explicitly converted to %1; use %select{%objcclass2|%objcinstance2}3 "
  "method for this conversion">;
-  
+
+def err_objc_attr_protocol_requires_definition : Error<
+  "attribute %0 can only be applied to @protocol definitions, not forward declarations">;
+
 // Function Parameter Semantic Analysis.
 def err_param_with_void_type : Error<"argument may not have 'void' type">;
 def err_void_only_param : Error<
@@ -2510,8 +2535,6 @@ def err_ident_list_in_fn_declaration : Error<
   "a parameter list without types is only allowed in a function definition">;
 def ext_param_not_declared : Extension<
   "parameter %0 was not declared, defaulting to type 'int'">;
-def err_param_typedef_of_void : Error<
-  "empty parameter list defined with a %select{typedef|type alias}0 of 'void' not allowed%select{ in C++|}0">;
 def err_param_default_argument : Error<
   "C does not support default arguments">;
 def err_param_default_argument_redefinition : Error<
@@ -3787,6 +3810,9 @@ def warn_typecheck_negative_array_new_size : Warning<"array size is negative">,
   InGroup<BadArrayNewLength>;
 def warn_typecheck_function_qualifiers : Warning<
   "qualifier on function type %0 has unspecified behavior">;
+def warn_typecheck_reference_qualifiers : Warning<
+  "'%0' qualifier on reference type %1 has no effect">,
+  InGroup<IgnoredQualifiers>;
 def err_typecheck_invalid_restrict_not_pointer : Error<
   "restrict requires a pointer or reference (%0 is invalid)">;
 def err_typecheck_invalid_restrict_not_pointer_noarg : Error<
@@ -5843,6 +5869,12 @@ def err_invalid_conversion_between_vector_and_integer : Error<
   "invalid conversion between vector type %0 and integer type %1 "
   "of different size">;
 
+def err_opencl_function_pointer_variable : Error<
+  "pointers to functions are not allowed">;
+
+def err_opencl_taking_function_address : Error<
+  "taking address of function is not allowed">;
+
 def err_invalid_conversion_between_vector_and_scalar : Error<
   "invalid conversion between vector type %0 and scalar type %1">;
 
@@ -6216,6 +6248,8 @@ def warn_format_string_is_wide_literal : Warning<
   "format string should not be a wide string">, InGroup<Format>;
 def warn_printf_format_string_contains_null_char : Warning<
   "format string contains '\\0' within the string body">, InGroup<Format>;
+def warn_printf_format_string_not_null_terminated : Warning<
+  "format string is not null-terminated">, InGroup<Format>;
 def warn_printf_asterisk_missing_arg : Warning<
   "'%select{*|.*}0' specified field %select{width|precision}0 is missing a matching 'int' argument">,
   InGroup<Format>;

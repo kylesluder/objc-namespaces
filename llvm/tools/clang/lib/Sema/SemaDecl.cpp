@@ -1399,15 +1399,6 @@ void Sema::ActOnPopScope(SourceLocation Loc, Scope *S) {
   }
 }
 
-void Sema::ActOnStartFunctionDeclarator() {
-  ++InFunctionDeclarator;
-}
-
-void Sema::ActOnEndFunctionDeclarator() {
-  assert(InFunctionDeclarator);
-  --InFunctionDeclarator;
-}
-
 /// \brief Look for an Objective-C class in the translation unit.
 ///
 /// \param Id The name of the Objective-C class we're looking for. If
@@ -4986,12 +4977,25 @@ Sema::ActOnVariableDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   bool IsLocalExternDecl = SC == SC_Extern &&
                            adjustContextForLocalExternDecl(DC);
 
-  if (getLangOpts().OpenCL && !getOpenCLOptions().cl_khr_fp16) {
-    // OpenCL v1.2 s6.1.1.1: reject declaring variables of the half and
-    // half array type (unless the cl_khr_fp16 extension is enabled).
-    if (Context.getBaseElementType(R)->isHalfType()) {
-      Diag(D.getIdentifierLoc(), diag::err_opencl_half_declaration) << R;
-      D.setInvalidType();
+  if (getLangOpts().OpenCL) {
+    // OpenCL v1.0 s6.8.a.3: Pointers to functions are not allowed.
+    QualType NR = R;
+    while (NR->isPointerType()) {
+      if (NR->isFunctionPointerType()) {
+        Diag(D.getIdentifierLoc(), diag::err_opencl_function_pointer_variable);
+        D.setInvalidType();
+        break;
+      }
+      NR = NR->getPointeeType();
+    }
+
+    if (!getOpenCLOptions().cl_khr_fp16) {
+      // OpenCL v1.2 s6.1.1.1: reject declaring variables of the half and
+      // half array type (unless the cl_khr_fp16 extension is enabled).
+      if (Context.getBaseElementType(R)->isHalfType()) {
+        Diag(D.getIdentifierLoc(), diag::err_opencl_half_declaration) << R;
+        D.setInvalidType();
+      }
     }
   }
 
@@ -6286,15 +6290,6 @@ static FunctionDecl* CreateNewFunctionDecl(Sema &SemaRef, Declarator &D,
         SemaRef.AdjustDestructorExceptionSpec(Record, NewDD);
       }
 
-      // The Microsoft ABI requires that we perform the destructor body
-      // checks (i.e. operator delete() lookup) at every declaration, as
-      // any translation unit may need to emit a deleting destructor.
-      if (SemaRef.Context.getTargetInfo().getCXXABI().isMicrosoft() &&
-          !Record->isDependentType() && Record->getDefinition() &&
-          !Record->isBeingDefined() && !NewDD->isDeleted()) {
-        SemaRef.CheckDestructor(NewDD);
-      }
-
       IsVirtualOkay = true;
       return NewDD;
 
@@ -6354,22 +6349,6 @@ static FunctionDecl* CreateNewFunctionDecl(Sema &SemaRef, Declarator &D,
                                 D.getLocStart(),
                                 NameInfo, R, TInfo, SC, isInline,
                                 true/*HasPrototype*/, isConstexpr);
-  }
-}
-
-void Sema::checkVoidParamDecl(ParmVarDecl *Param) {
-  // In C++, the empty parameter-type-list must be spelled "void"; a
-  // typedef of void is not permitted.
-  if (getLangOpts().CPlusPlus &&
-      Param->getType().getUnqualifiedType() != Context.VoidTy) {
-    bool IsTypeAlias = false;
-    if (const TypedefType *TT = Param->getType()->getAs<TypedefType>())
-      IsTypeAlias = isa<TypeAliasDecl>(TT->getDecl());
-    else if (const TemplateSpecializationType *TST =
-               Param->getType()->getAs<TemplateSpecializationType>())
-      IsTypeAlias = TST->isTypeAlias();
-    Diag(Param->getLocation(), diag::err_param_typedef_of_void)
-      << IsTypeAlias;
   }
 }
 
@@ -6915,7 +6894,6 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
         FTI.ArgInfo[0].Param &&
         cast<ParmVarDecl>(FTI.ArgInfo[0].Param)->getType()->isVoidType()) {
       // Empty arg list, don't push any params.
-      checkVoidParamDecl(cast<ParmVarDecl>(FTI.ArgInfo[0].Param));
     } else if (FTI.NumArgs > 0 && FTI.ArgInfo[0].Param != 0) {
       for (unsigned i = 0, e = FTI.NumArgs; i != e; ++i) {
         ParmVarDecl *Param = cast<ParmVarDecl>(FTI.ArgInfo[i].Param);
@@ -11075,10 +11053,14 @@ CreateNewDecl:
   if (Attr)
     ProcessDeclAttributeList(S, New, Attr);
 
-  // If we're declaring or defining a tag in function prototype scope
-  // in C, note that this type can only be used within the function.
-  if (Name && S->isFunctionPrototypeScope() && !getLangOpts().CPlusPlus)
+  // If we're declaring or defining a tag in function prototype scope in C,
+  // note that this type can only be used within the function and add it to
+  // the list of decls to inject into the function definition scope.
+  if (!getLangOpts().CPlusPlus && (Name || Kind == TTK_Enum) &&
+      getNonFieldDeclScope(S)->isFunctionPrototypeScope()) {
     Diag(Loc, diag::warn_decl_in_param_list) << Context.getTagDeclType(New);
+    DeclsInPrototypeScope.push_back(New);
+  }
 
   // Set the lexical context. If the tag has a C++ scope specifier, the
   // lexical context will be different from the semantic context.
@@ -11127,12 +11109,6 @@ CreateNewDecl:
         New->getDeclContext()->getRedeclContext()->isTranslationUnit() &&
         II->isStr("FILE"))
       Context.setFILEDecl(New);
-
-  // If we were in function prototype scope (and not in C++ mode), add this
-  // tag to the list of decls to inject into the function definition scope.
-  if (S->isFunctionPrototypeScope() && !getLangOpts().CPlusPlus &&
-      InFunctionDeclarator && Name)
-    DeclsInPrototypeScope.push_back(New);
 
   if (PrevDecl)
     mergeDeclAttributes(New, PrevDecl);
@@ -12967,11 +12943,6 @@ void Sema::ActOnEnumBody(SourceLocation EnumLoc, SourceLocation LBraceLoc,
 
   Enum->completeDefinition(BestType, BestPromotionType,
                            NumPositiveBits, NumNegativeBits);
-
-  // If we're declaring a function, ensure this decl isn't forgotten about -
-  // it needs to go into the function scope.
-  if (InFunctionDeclarator)
-    DeclsInPrototypeScope.push_back(Enum);
 
   CheckForDuplicateEnumValues(*this, Elements, Enum, EnumType);
 

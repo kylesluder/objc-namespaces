@@ -79,6 +79,10 @@ void CompilerInstance::setTarget(TargetInfo *Value) {
 
 void CompilerInstance::setFileManager(FileManager *Value) {
   FileMgr = Value;
+  if (Value)
+    VirtualFileSystem = Value->getVirtualFileSystem();
+  else
+    VirtualFileSystem.reset();
 }
 
 void CompilerInstance::setSourceManager(SourceManager *Value) {
@@ -110,9 +114,9 @@ static void SetUpDiagnosticLog(DiagnosticOptions *DiagOpts,
   raw_ostream *OS = &llvm::errs();
   if (DiagOpts->DiagnosticLogFile != "-") {
     // Create the output stream.
-    llvm::raw_fd_ostream *FileOS(
-        new llvm::raw_fd_ostream(DiagOpts->DiagnosticLogFile.c_str(), ErrorInfo,
-                                 llvm::sys::fs::F_Append));
+    llvm::raw_fd_ostream *FileOS(new llvm::raw_fd_ostream(
+        DiagOpts->DiagnosticLogFile.c_str(), ErrorInfo,
+        llvm::sys::fs::F_Append | llvm::sys::fs::F_Text));
     if (!ErrorInfo.empty()) {
       Diags.Report(diag::warn_fe_cc_log_diagnostics_failure)
         << DiagOpts->DiagnosticLogFile << ErrorInfo;
@@ -138,7 +142,7 @@ static void SetupSerializedDiagnostics(DiagnosticOptions *DiagOpts,
   std::string ErrorInfo;
   OwningPtr<llvm::raw_fd_ostream> OS;
   OS.reset(new llvm::raw_fd_ostream(OutputFile.str().c_str(), ErrorInfo,
-                                    llvm::sys::fs::F_Binary));
+                                    llvm::sys::fs::F_None));
 
   if (!ErrorInfo.empty()) {
     Diags.Report(diag::warn_fe_serialized_diag_failure)
@@ -197,7 +201,11 @@ CompilerInstance::createDiagnostics(DiagnosticOptions *Opts,
 // File Manager
 
 void CompilerInstance::createFileManager() {
-  FileMgr = new FileManager(getFileSystemOpts());
+  if (!hasVirtualFileSystem()) {
+    // TODO: choose the virtual file system based on the CompilerInvocation.
+    setVirtualFileSystem(vfs::getRealFileSystem());
+  }
+  FileMgr = new FileManager(getFileSystemOpts(), VirtualFileSystem);
 }
 
 // Source Manager
@@ -574,7 +582,7 @@ CompilerInstance::createOutputFile(StringRef OutputPath,
     OSFile = OutFile;
     OS.reset(new llvm::raw_fd_ostream(
         OSFile.c_str(), Error,
-        (Binary ? llvm::sys::fs::F_Binary : llvm::sys::fs::F_None)));
+        (Binary ? llvm::sys::fs::F_None : llvm::sys::fs::F_Text)));
     if (!Error.empty())
       return 0;
   }
@@ -867,6 +875,8 @@ static void compileModule(CompilerInstance &ImportingInstance,
                                    ImportingInstance.getDiagnosticClient()),
                              /*ShouldOwnClient=*/true);
 
+  Instance.setVirtualFileSystem(&ImportingInstance.getVirtualFileSystem());
+
   // Note that this module is part of the module build stack, so that we
   // can detect cycles in the module graph.
   Instance.createFileManager(); // FIXME: Adopt file manager from importer?
@@ -1012,7 +1022,7 @@ static void checkConfigMacro(Preprocessor &PP, StringRef ConfigMacro,
 static void writeTimestampFile(StringRef TimestampFile) {
   std::string ErrorInfo;
   llvm::raw_fd_ostream Out(TimestampFile.str().c_str(), ErrorInfo,
-                           llvm::sys::fs::F_Binary);
+                           llvm::sys::fs::F_None);
 }
 
 /// \brief Prune the module cache of modules that haven't been accessed in
