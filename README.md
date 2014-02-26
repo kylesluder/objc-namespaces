@@ -27,9 +27,9 @@ A namespace is a conceptual grouping of classes, categories, protocols, and sele
 
 **Rationale:** Allowing namespaces and other kinds of identifiers to share names complicates parsing.
 
-A namespace is named by a string consisting of valid C identifier characters and periods. There is one flat collection of namespaces; namespaces can only contain Objective-C classes, categories, protocols, and selectors. No provision is made for mapping Objective-C namespaces to C++ namespaces, even when compiling Objective-C++ code.[^OBJCPP]
+A namespace is named by a string consisting of valid C identifier characters and periods. There is one flat collection of namespaces; namespaces can only contain Objective-C classes, categories, protocols, and selectors. No provision is made for mapping Objective-C namespaces to C++ namespaces, even when compiling Objective-C++ code.
 
-[^OBJCPP]: It's not the goal to make life hard for Objective-C++ developers, but it's likewise not the goal to make Objective-C developers deal with all the intricacies of C++ namespaces, or (potentially worse) just a subset of them.
+**Rationale**: It's not the goal to make life hard for Objective-C++ developers, but it's likewise not the goal to make Objective-C developers deal with all the intricacies of C++ namespaces, or (potentially worse) just a subset of them.
 
 
 The Default Namespace
@@ -69,7 +69,9 @@ Namespace Scopes and the `@using` Directive
 
 At any given point in a translation unit there exists a stack of namespace scopes. A namespace scope consists of a set of identifiers and namespace aliases. Each C scope and Objective-C `@`-block creates a correspondingly-lived namespace scope. When the compiler encounters an unqualified identifier, it looks up the stack of namespace scopes to find a matching identifier of the appropriate type.
 
-All identifiers in the namespace named by a `@namespace` block are a member of the namespace scope created by that block.[^TWOPASS]
+All identifiers in the namespace named by a `@namespace` block are a member of the namespace scope created by that block.
+
+**Note:** With two-pass compilation, this means that a namespace scope includes even identifiers declared _after_ the end of the namespace scope in which they are used. With one-pass compilation, this may require appropriate placement or qualification of forward declarations.
 
 The `@using` directive can be used to create a new scope that contains either a single identifier or all the identifiers from a namespace:
 
@@ -96,8 +98,6 @@ The `@using` directive can also create a namespace scope containing a namespace 
 Within a scope containing a namespace alias, references to that namespace alias are treated as if they were spelled as references to the original namespace.
 
 A `@using` directive MAY NOT create an ambiguity in identifier resolution. A `@using` directive that would cause an unqualified identifier to refer to two different symbols is an error.
-
-[^TWOPASS]: With two-pass compilation, this means that a namespace scope includes even identifiers declared _after_ the end of the namespace scope in which they are used. With one-pass compilation, this may require appropriate placement or qualification of forward declarations.
 
 
 Namespaced Selectors
@@ -137,7 +137,9 @@ Method Resolution
 
 When resolving a selector to a method at runtime, the dispatch machinery follows a certain resolution order, where _S_ refers to the selector being dispatched and _C_ is the class for the receiver (or a metaclass if the receiver is a class).
 
-1. If a matching method is found on _C_ that belongs to the same namespace as _S_, that method is chosen. Only one such method can exist.[^UNIQ]
+1. If a matching method is found on _C_ that belongs to the same namespace as _S_, that method is chosen. Only one such method can exist.
+
+   **Rationale:** It's possible to produce a binary that has multiple definitions of a method in the same namespace, but the loader will have chosen one winning method. This situation already exists independent of namespacing.
 
 2. Else, if _S_ does not have a namespace and a matching method is found on _C_ in the `default` namespace, that method is chosen. Only one such method can exist.
 
@@ -151,13 +153,11 @@ The programmer can override the compiler's preferred namespace selection using t
 
     [<receiver> @namespace(<ns>) arg1:... arg2:...];
 
-A namespace of `nil` instructs the compiler not to encode a namespace in the selector for the message send. This is discouraged, but can be useful when code needs to call methods in a namespace it cannot see (for example, calling private API to work around a framework or operating system bug).[^PRIVMSG]
+A namespace of `nil` instructs the compiler not to encode a namespace in the selector for the message send. This is discouraged, but can be useful when code needs to call methods in a namespace it cannot see (for example, calling private API to work around a framework or operating system bug).
+
+**Rationale:** A better approach in this circumstance might be to forward-declare both the namespace and the method in question. This will permit the continued use of `-Wunknown-selector` warnings when using `@selector()` to catch typos in the namespace or keywords, or cases where ARC cannot determine the memory management behavior of the unknown selector.
 
 As noted above, the compiler should warn if multiple methods in different namespaces with the same keywords are seen defined on the class of the receiver.
-
-[^UNIQ]: It's possible to produce an binary that has multiple definitions of a method in the same namespace, but the loader will have chosen one winning method. This situation already exists independent of namespacing.
-
-[^PRIVMSG]: A better approach in this circumstance might be to forward-declare both the namespace and the method in question. This will permit the continued use of `-Wunknown-selector` warnings when using `@selector()` to catch typos in the namespace or keywords, or cases where ARC cannot determine the memory management behavior of the unknown selector.
 
 
 `@class()` Expressions
