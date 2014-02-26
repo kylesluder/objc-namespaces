@@ -29,7 +29,7 @@
 
 using namespace __tsan;  // NOLINT
 
-const int kSigCount = 64;
+const int kSigCount = 65;
 
 struct my_siginfo_t {
   // The size is determined by looking at sizeof of real siginfo_t on linux.
@@ -881,7 +881,7 @@ TSAN_INTERCEPTOR(int, pthread_create,
   }
   int detached = 0;
   REAL(pthread_attr_getdetachstate)(attr, &detached);
-  AdjustStackSizeLinux(attr);
+  AdjustStackSize(attr);
 
   ThreadParam p;
   p.callback = callback;
@@ -960,7 +960,7 @@ TSAN_INTERCEPTOR(int, pthread_mutex_trylock, void *m) {
   if (res == EOWNERDEAD)
     MutexRepair(thr, pc, (uptr)m);
   if (res == 0 || res == EOWNERDEAD)
-    MutexLock(thr, pc, (uptr)m);
+    MutexLock(thr, pc, (uptr)m, /*rec=*/1, /*try_lock=*/true);
   return res;
 }
 
@@ -1004,7 +1004,7 @@ TSAN_INTERCEPTOR(int, pthread_spin_trylock, void *m) {
   SCOPED_TSAN_INTERCEPTOR(pthread_spin_trylock, m);
   int res = REAL(pthread_spin_trylock)(m);
   if (res == 0) {
-    MutexLock(thr, pc, (uptr)m);
+    MutexLock(thr, pc, (uptr)m, /*rec=*/1, /*try_lock=*/true);
   }
   return res;
 }
@@ -1047,7 +1047,7 @@ TSAN_INTERCEPTOR(int, pthread_rwlock_tryrdlock, void *m) {
   SCOPED_TSAN_INTERCEPTOR(pthread_rwlock_tryrdlock, m);
   int res = REAL(pthread_rwlock_tryrdlock)(m);
   if (res == 0) {
-    MutexReadLock(thr, pc, (uptr)m);
+    MutexLock(thr, pc, (uptr)m, /*rec=*/1, /*try_lock=*/true);
   }
   return res;
 }
@@ -1074,7 +1074,7 @@ TSAN_INTERCEPTOR(int, pthread_rwlock_trywrlock, void *m) {
   SCOPED_TSAN_INTERCEPTOR(pthread_rwlock_trywrlock, m);
   int res = REAL(pthread_rwlock_trywrlock)(m);
   if (res == 0) {
-    MutexLock(thr, pc, (uptr)m);
+    MutexLock(thr, pc, (uptr)m, /*rec=*/1, /*try_lock=*/true);
   }
   return res;
 }
@@ -1704,6 +1704,10 @@ void ALWAYS_INLINE rtl_generic_sighandler(bool sigact, int sig,
     my_siginfo_t *info, void *ctx) {
   ThreadState *thr = cur_thread();
   SignalContext *sctx = SigCtx(thr);
+  if (sig < 0 || sig >= kSigCount) {
+    VPrintf(1, "ThreadSanitizer: ignoring signal %d\n", sig);
+    return;
+  }
   // Don't mess with synchronous signals.
   const bool sync = is_sync_signal(sctx, sig);
   if (sync ||

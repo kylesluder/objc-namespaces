@@ -124,6 +124,7 @@ void RawWrite(const char *buffer);
 bool PrintsToTty();
 // Caching version of PrintsToTty(). Not thread-safe.
 bool PrintsToTtyCached();
+bool ColorizeReports();
 void Printf(const char *format, ...);
 void Report(const char *format, ...);
 void SetPrintfAndReportCallback(void (*callback)(const char *));
@@ -178,6 +179,7 @@ u32 GetUid();
 void ReExec();
 bool StackSizeIsUnlimited();
 void SetStackSizeLimitInBytes(uptr limit);
+void AdjustStackSize(void *attr);
 void PrepareForSandboxing();
 
 void InitTlsSize();

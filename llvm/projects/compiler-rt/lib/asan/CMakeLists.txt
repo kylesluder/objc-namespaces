@@ -1,5 +1,12 @@
 # Build for the AddressSanitizer runtime support library.
 
+if(APPLE)
+# Don't set rpath for the ASan libraries. Developers are encouraged to ship
+# their binaries together with the corresponding ASan runtime libraries,
+# so they'll anyway need to fix the rpath and the install name.
+set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+endif()
+
 set(ASAN_SOURCES
   asan_allocator2.cc
   asan_activation.cc
@@ -37,6 +44,12 @@ set(ASAN_COMMON_DEFINITIONS
 if(ANDROID)
   list(APPEND ASAN_COMMON_DEFINITIONS
     ASAN_LOW_MEMORY=1)
+endif()
+
+if (NOT MSVC)
+  set(ASAN_ASM_SOURCES asan_asm_instrumentation.S)
+  set_source_files_properties(${ASAN_ASM_SOURCES} PROPERTIES LANGUAGE C)
+  list(APPEND ASAN_SOURCES ${ASAN_ASM_SOURCES})
 endif()
 
 # Compile ASan sources into an object library.
@@ -129,6 +142,6 @@ add_compiler_rt_resource_file(asan_blacklist asan_blacklist.txt)
 add_dependencies(asan asan_blacklist)
 add_dependencies(compiler-rt asan)
 
-if(LLVM_INCLUDE_TESTS)
+if(COMPILER_RT_INCLUDE_TESTS)
   add_subdirectory(tests)
 endif()

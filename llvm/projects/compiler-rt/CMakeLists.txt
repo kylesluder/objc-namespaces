@@ -1,11 +1,19 @@
 # CMake build for CompilerRT.
 #
 # This build assumes that CompilerRT is checked out into the
-# 'projects/compiler-rt' inside of an LLVM tree, it is not a stand-alone build
-# system.
+# 'projects/compiler-rt' inside of an LLVM tree.
+# Standalone build system for CompilerRT is not yet ready.
 #
 # An important constraint of the build is that it only produces libraries
 # based on the ability of the host toolchain to target various platforms.
+
+# Check if compiler-rt is built as a standalone project.
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  project(CompilerRT)
+  set(COMPILER_RT_STANDALONE_BUILD TRUE)
+else()
+  set(COMPILER_RT_STANDALONE_BUILD FALSE)
+endif()
 
 # The CompilerRT build system requires CMake version 2.8.8 or higher in order
 # to use its support for building convenience "libraries" as a collection of
@@ -18,24 +26,103 @@ else()
   cmake_minimum_required(VERSION 2.8.12.1)
 endif()
 
-# Top level target used to build all compiler-rt libraries.
-add_custom_target(compiler-rt)
+# FIXME: It may be removed when we use 2.8.12.
+if(CMAKE_VERSION VERSION_LESS 2.8.12)
+  # Invalidate a couple of keywords.
+  set(cmake_2_8_12_INTERFACE)
+  set(cmake_2_8_12_PRIVATE)
+else()
+  # Use ${cmake_2_8_12_KEYWORD} intead of KEYWORD in target_link_libraries().
+  set(cmake_2_8_12_INTERFACE INTERFACE)
+  set(cmake_2_8_12_PRIVATE PRIVATE)
+  if(POLICY CMP0022)
+    cmake_policy(SET CMP0022 NEW) # automatic when 2.8.12 is required
+  endif()
+endif()
 
-# Compute the Clang version from the LLVM version.
-# FIXME: We should be able to reuse CLANG_VERSION variable calculated
-#        in Clang cmake files, instead of copying the rules here.
-string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION
-       ${PACKAGE_VERSION})
-# Setup the paths where compiler-rt runtimes and headers should be stored.
-set(COMPILER_RT_INSTALL_PATH lib${LLVM_LIBDIR_SUFFIX}/clang/${CLANG_VERSION})
+# Top level target used to build all compiler-rt libraries.
+add_custom_target(compiler-rt ALL)
+
+if (NOT COMPILER_RT_STANDALONE_BUILD)
+  # Compute the Clang version from the LLVM version.
+  # FIXME: We should be able to reuse CLANG_VERSION variable calculated
+  #        in Clang cmake files, instead of copying the rules here.
+  string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION
+         ${PACKAGE_VERSION})
+  # Setup the paths where compiler-rt runtimes and headers should be stored.
+  set(COMPILER_RT_OUTPUT_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR}/clang/${CLANG_VERSION})
+  set(COMPILER_RT_INSTALL_PATH lib${LLVM_LIBDIR_SUFFIX}/clang/${CLANG_VERSION})
+  option(COMPILER_RT_INCLUDE_TESTS "Generate and build compiler-rt unit tests."
+         ${LLVM_INCLUDE_TESTS})
+ option(COMPILER_RT_ENABLE_WERROR "Fail and stop if warning is triggered"
+        ${LLVM_ENABLE_WERROR})
+  # Use just-built Clang to compile/link tests.
+  set(COMPILER_RT_TEST_COMPILER ${LLVM_RUNTIME_OUTPUT_INTDIR}/clang)
+  set(COMPILER_RT_TEST_COMPILER_ID Clang)
+else()
+  # Take output dir and install path from the user.
+  set(COMPILER_RT_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR} CACHE PATH
+    "Path where built compiler-rt libraries should be stored.")
+  set(COMPILER_RT_INSTALL_PATH ${CMAKE_INSTALL_PREFIX} CACHE PATH
+    "Path where built compiler-rt libraries should be installed.")
+  option(COMPILER_RT_INCLUDE_TESTS "Generate and build compiler-rt unit tests." OFF)
+  option(COMPILER_RT_ENABLE_WERROR "Fail and stop if warning is triggered" OFF)
+  # Use a host compiler to compile/link tests.
+  set(COMPILER_RT_TEST_COMPILER ${CMAKE_C_COMPILER})
+  set(COMPILER_RT_TEST_COMPILER_ID ${CMAKE_C_COMPILER_ID})
+
+  set(LLVM_CONFIG_PATH "" CACHE PATH "Path to llvm-config binary")
+  if (NOT LLVM_CONFIG_PATH)
+    find_program(LLVM_CONFIG_PATH "llvm-config")
+    if (NOT LLVM_CONFIG_PATH)
+      message(FATAL_ERROR "llvm-config not found: specify LLVM_CONFIG_PATH")
+    endif()
+  endif()
+  execute_process(
+    COMMAND ${LLVM_CONFIG_PATH} "--obj-root" "--bindir" "--libdir" "--src-root"
+    RESULT_VARIABLE HAD_ERROR
+    OUTPUT_VARIABLE CONFIG_OUTPUT)
+  if (HAD_ERROR)
+    message(FATAL_ERROR "llvm-config failed with status ${HAD_ERROR}")
+  endif()
+  string(REGEX REPLACE "[ \t]*[\r\n]+[ \t]*" ";" CONFIG_OUTPUT ${CONFIG_OUTPUT})
+  list(GET CONFIG_OUTPUT 0 LLVM_BINARY_DIR)
+  list(GET CONFIG_OUTPUT 1 LLVM_TOOLS_BINARY_DIR)
+  list(GET CONFIG_OUTPUT 2 LLVM_LIBRARY_DIR)
+  list(GET CONFIG_OUTPUT 3 LLVM_MAIN_SRC_DIR)
+
+  # Make use of LLVM CMake modules.
+  set(LLVM_CMAKE_PATH "${LLVM_BINARY_DIR}/share/llvm/cmake")
+  list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
+  # Get some LLVM variables from LLVMConfig.
+  include("${LLVM_CMAKE_PATH}/LLVMConfig.cmake")
+
+  set(LLVM_LIBRARY_OUTPUT_INTDIR ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib)
+
+  # Find Python interpreter.
+  set(Python_ADDITIONAL_VERSIONS 2.7 2.6 2.5)
+  include(FindPythonInterp)
+  if(NOT PYTHONINTERP_FOUND)
+    message(FATAL_ERROR "
+      Unable to find Python interpreter required testing. Please install Python
+      or specify the PYTHON_EXECUTABLE CMake variable.")
+  endif()
+
+  # Define default arguments to lit.
+  set(LIT_ARGS_DEFAULT "-sv")
+  if (MSVC OR XCODE)
+    set(LIT_ARGS_DEFAULT "${LIT_ARGS_DEFAULT} --no-progress-bar")
+  endif()
+  set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
+endif()
+
 string(TOLOWER ${CMAKE_SYSTEM_NAME} COMPILER_RT_OS_DIR)
-set(COMPILER_RT_OUTPUT_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR}/clang/${CLANG_VERSION})
 set(COMPILER_RT_LIBRARY_OUTPUT_DIR
   ${COMPILER_RT_OUTPUT_DIR}/lib/${COMPILER_RT_OS_DIR})
 set(COMPILER_RT_LIBRARY_INSTALL_DIR
   ${COMPILER_RT_INSTALL_PATH}/lib/${COMPILER_RT_OS_DIR})
 
-# Add path for custom modules
+# Add path for custom compiler-rt modules.
 set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake"
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules"
@@ -145,6 +232,11 @@ pythonize_bool(COMPILER_RT_DEBUG)
 #================================
 include(config-ix)
 
+if(COMPILER_RT_ENABLE_WERROR)
+  add_definitions_if(COMPILER_RT_HAS_WERROR_FLAG -Werror)
+  add_definitions_if(COMPILER_RT_HAS_WX_FLAG /WX)
+endif()
+
 # Provide some common commmandline flags for Sanitizer runtimes.
 append_if(SANITIZER_COMMON_CFLAGS COMPILER_RT_HAS_FPIC_FLAG -fPIC)
 append_if(SANITIZER_COMMON_CFLAGS COMPILER_RT_HAS_FNO_BUILTIN_FLAG -fno-builtin)
@@ -235,7 +327,7 @@ endif()
 
 add_subdirectory(lib)
 
-if(LLVM_INCLUDE_TESTS)
+if(COMPILER_RT_INCLUDE_TESTS)
   add_subdirectory(unittests)
 endif()
 add_subdirectory(test)

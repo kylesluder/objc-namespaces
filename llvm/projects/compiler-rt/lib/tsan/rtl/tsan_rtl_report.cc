@@ -212,7 +212,7 @@ void ScopedReport::AddThread(const ThreadContext *tctx) {
   rt->id = tctx->tid;
   rt->pid = tctx->os_id;
   rt->running = (tctx->status == ThreadStatusRunning);
-  rt->name = tctx->name ? internal_strdup(tctx->name) : 0;
+  rt->name = internal_strdup(tctx->name);
   rt->parent_tid = tctx->parent_tid;
   rt->stack = 0;
 #ifdef TSAN_GO
@@ -278,6 +278,7 @@ void ScopedReport::AddMutex(const SyncVar *s) {
   ReportMutex *rm = new(mem) ReportMutex();
   rep_->mutexes.PushBack(rm);
   rm->id = s->uid;
+  rm->addr = s->addr;
   rm->destroyed = false;
   rm->stack = 0;
 #ifndef TSAN_GO
@@ -294,6 +295,7 @@ void ScopedReport::AddMutex(u64 id) {
   ReportMutex *rm = new(mem) ReportMutex();
   rep_->mutexes.PushBack(rm);
   rm->id = id;
+  rm->addr = 0;
   rm->destroyed = true;
   rm->stack = 0;
 }

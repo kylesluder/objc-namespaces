@@ -549,6 +549,9 @@ struct Context {
   // Number of fired suppressions may be large enough.
   InternalMmapVector<FiredSuppression> fired_suppressions;
 
+  __sanitizer::DeadlockDetector<DDBV> dd;
+  Mutex dd_mtx;
+
   Flags flags;
 
   u64 stat[StatCnt];
@@ -725,9 +728,10 @@ void ProcessPendingSignals(ThreadState *thr);
 void MutexCreate(ThreadState *thr, uptr pc, uptr addr,
                  bool rw, bool recursive, bool linker_init);
 void MutexDestroy(ThreadState *thr, uptr pc, uptr addr);
-void MutexLock(ThreadState *thr, uptr pc, uptr addr, int rec = 1);
+void MutexLock(ThreadState *thr, uptr pc, uptr addr, int rec = 1,
+               bool try_lock = false);
 int  MutexUnlock(ThreadState *thr, uptr pc, uptr addr, bool all = false);
-void MutexReadLock(ThreadState *thr, uptr pc, uptr addr);
+void MutexReadLock(ThreadState *thr, uptr pc, uptr addr, bool try_lock = false);
 void MutexReadUnlock(ThreadState *thr, uptr pc, uptr addr);
 void MutexReadOrWriteUnlock(ThreadState *thr, uptr pc, uptr addr);
 void MutexRepair(ThreadState *thr, uptr pc, uptr addr);  // call on EOWNERDEAD
