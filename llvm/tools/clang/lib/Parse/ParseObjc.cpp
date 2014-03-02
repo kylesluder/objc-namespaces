@@ -162,9 +162,11 @@ Decl *Parser::ParseObjCAtNamespaceDeclaration(SourceLocation AtLoc) {
   assert(Tok.isObjCAtKeyword(tok::objc_namespace) &&
          "ParseObjCAtNamespaceDeclaration(): Expected @namespace");
   CheckNestedObjCContexts(AtLoc);
-  ConsumeToken(); // the namespace identifier
+  ConsumeToken(); // the "namespace" part of "@namespace"
 
   // TODO: Code Completion
+  if (Tok.is(tok::code_completion))
+      assert(0 && "Handle code completion");
 
   if (Tok.isNot(tok::identifier)) {
     Diag(Tok, diag::err_expected)
@@ -173,10 +175,12 @@ Decl *Parser::ParseObjCAtNamespaceDeclaration(SourceLocation AtLoc) {
   }
 
   // TODO: Support namespaces with embedded periods?
+  IdentifierInfo *namespaceName = Tok.getIdentifierInfo();
+  ConsumeToken(); // the namespace name
 
   // Process namespace
   // TODO: Reject nested @namespaces
-  return Actions.ActOnStartObjCNamespace(AtLoc, Tok.getIdentifierInfo());
+  return Actions.ActOnStartObjCNamespace(AtLoc, namespaceName);
 }
 
 ///
