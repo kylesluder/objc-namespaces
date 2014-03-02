@@ -1225,7 +1225,9 @@ private:
                                   Decl *CDecl);
   DeclGroupPtrTy ParseObjCAtProtocolDeclaration(SourceLocation atLoc,
                                                 ParsedAttributes &prefixAttrs);
-
+    
+  ObjCNamespaceDecl *CurObjCNamespaceDecl;
+  
   struct ObjCImplParsingDataRAII {
     Parser &P;
     Decl *Dcl;

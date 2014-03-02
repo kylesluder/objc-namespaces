@@ -143,15 +143,13 @@ void Parser::CheckNestedObjCContexts(SourceLocation AtLoc)
   if (CurParsedObjCImpl) {
     CurParsedObjCImpl->finish(AtLoc);
   } else {
-    Actions.ActOnAtEnd(getCurScope(), AtLoc);
+    Actions.ActOnEndOfObjCContainer(getCurScope(), AtLoc);
   }
   Diag(AtLoc, diag::err_objc_missing_end)
       << FixItHint::CreateInsertion(AtLoc, "@end\n");
   if (Decl)
     Diag(Decl->getLocStart(), diag::note_objc_container_start)
         << (int) ock;
-
-  // TODO: Check nesting of namepsaces
 }
 
 ///   objc-namespace:
@@ -161,9 +159,17 @@ void Parser::CheckNestedObjCContexts(SourceLocation AtLoc)
 Decl *Parser::ParseObjCAtNamespaceDeclaration(SourceLocation AtLoc) {
   assert(Tok.isObjCAtKeyword(tok::objc_namespace) &&
          "ParseObjCAtNamespaceDeclaration(): Expected @namespace");
-  CheckNestedObjCContexts(AtLoc);
+  CheckNestedObjCContexts(AtLoc); // disallow nesting "@namespace" within "@interface", etc.
+  
+  if (CurObjCNamespaceDecl) {
+    // Disallow nested @namespace at top level
+    Diag(AtLoc, diag::err_objc_nested_namespace)
+      << FixItHint::CreateInsertion(AtLoc, "@end\n");
+    Diag(CurObjCNamespaceDecl->getLocStart(), diag::note_objc_namespace_start);
+    CurObjCNamespaceDecl = 0;
+  }
   ConsumeToken(); // the "namespace" part of "@namespace"
-
+  
   // TODO: Code Completion
   if (Tok.is(tok::code_completion))
       assert(0 && "Handle code completion");
@@ -177,10 +183,10 @@ Decl *Parser::ParseObjCAtNamespaceDeclaration(SourceLocation AtLoc) {
   // TODO: Support namespaces with embedded periods?
   IdentifierInfo *namespaceName = Tok.getIdentifierInfo();
   ConsumeToken(); // the namespace name
-
-  // Process namespace
-  // TODO: Reject nested @namespaces
-  return Actions.ActOnStartObjCNamespace(AtLoc, namespaceName);
+  
+  ObjCNamespaceDecl *D = cast<ObjCNamespaceDecl>(Actions.ActOnStartObjCNamespace(AtLoc, namespaceName));
+  CurObjCNamespaceDecl = D;
+  return D;
 }
 
 ///
@@ -577,7 +583,7 @@ void Parser::ParseObjCInterfaceDeclList(tok::ObjCKeywordKind contextKey,
 
   // Insert collected methods declarations into the @interface object.
   // This passes in an invalid SourceLocation for AtEndLoc when EOF is hit.
-  Actions.ActOnAtEnd(getCurScope(), AtEnd, allMethods, allTUVariables);
+  Actions.ActOnEndOfObjCContainer(getCurScope(), AtEnd, allMethods, allTUVariables);
 }
 
 ///   Parse property attribute declarations.
@@ -1639,7 +1645,10 @@ Parser::ParseObjCAtEndDeclaration(SourceRange atEnd) {
   ConsumeToken(); // the "end" identifier
   if (CurParsedObjCImpl)
     CurParsedObjCImpl->finish(atEnd);
-  else
+  else if (CurObjCNamespaceDecl) {
+    Actions.ActOnEndOfObjCNamespace();
+    CurObjCNamespaceDecl = 0;
+  } else
     // missing @implementation
     Diag(atEnd.getBegin(), diag::err_expected_objc_container);
   return DeclGroupPtrTy();
@@ -1666,7 +1675,7 @@ void Parser::ObjCImplParsingDataRAII::finish(SourceRange AtEnd) {
     P.ParseLexedObjCMethodDefs(*LateParsedObjCMethods[i], 
                                true/*Methods*/);
 
-  P.Actions.ActOnAtEnd(P.getCurScope(), AtEnd);
+  P.Actions.ActOnEndOfObjCContainer(P.getCurScope(), AtEnd);
 
   if (HasCFunction)
     for (size_t i = 0; i < LateParsedObjCMethods.size(); ++i)

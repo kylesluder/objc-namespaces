@@ -2539,18 +2539,17 @@ Sema::ObjCContainerKind Sema::getObjCContainerKind() const {
   }
 }
 
-// Note: For class/category implementations, allMethods is always null.
-Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
-                       ArrayRef<DeclGroupPtrTy> allTUVars) {
-  if (isa<ObjCNamespaceDecl>(CurContext)) {
-    assert(getObjCContainerKind() == Sema::OCK_None
-      && "Somehow we think that @namespace is a method container");
-    PopDeclContext();
-    return 0;
-  }
+void Sema::ActOnEndOfObjCNamespace() {
+  assert(isa<ObjCNamespaceDecl>(CurContext) && "Expected to be acting on @end of namespace");
+  PopDeclContext();
+}
 
+// Note: For class/category implementations, allMethods is always null.
+void Sema::ActOnEndOfObjCContainer(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
+                       ArrayRef<DeclGroupPtrTy> allTUVars) {
+  assert(!isa<ObjCNamespaceDecl>(CurContext) && "Should be calling ActOnEndOfObjCNamespace() for namespaces");
   if (getObjCContainerKind() == Sema::OCK_None)
-    return 0;
+    return;
 
   assert(AtEnd.isValid() && "Invalid location for '@end'");
 
@@ -2755,7 +2754,6 @@ Decl *Sema::ActOnAtEnd(Scope *S, SourceRange AtEnd, ArrayRef<Decl *> allMethods,
   }
 
   ActOnDocumentableDecl(ClassDecl);
-  return ClassDecl;
 }
 
 

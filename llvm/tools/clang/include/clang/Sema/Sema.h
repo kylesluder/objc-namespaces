@@ -6734,7 +6734,8 @@ public:
   void DiagnoseClassExtensionDupMethods(ObjCCategoryDecl *CAT,
                                         ObjCInterfaceDecl *ID);
 
-  Decl *ActOnAtEnd(Scope *S, SourceRange AtEnd,
+  void ActOnEndOfObjCNamespace();
+  void ActOnEndOfObjCContainer(Scope *S, SourceRange AtEnd,
                    ArrayRef<Decl *> allMethods = None,
                    ArrayRef<DeclGroupPtrTy> allTUVars = None);
 
